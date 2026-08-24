@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+.env
+*.pem
+*.key
+keys/
+# never commit captured traffic or extracted secrets
+*.wire
+!tests/golden/*.wire
+captures/
+# transfer artifact from the assistant
+/_relay_pkg.zip
+# gradle (burp extension)
+burp/.gradle/
+burp/build/

@@ -1,0 +1,12 @@
+
+name: golden
+scope: { hosts: [ "api.example.com" ] }
+request:
+  envelope: { locate: [ { in: json_field, field: "data" } ] }
+  transform:
+    - base64_decode
+    - aes_decrypt: { mode: cbc, key: "${session_key}", iv: { source: value, value: "${iv}" } }
+    - as_json
+  reseal:
+    - sign: { algo: hmac_sha256, key: "${session_key}", input: "${payload_b64}", into: sign }
+    - serialize: { mode: canonical }

@@ -1,0 +1,45 @@
+# acme-bank-mobile.yaml — illustrative example (fictional target)
+# Authorized testing only. Do not use against systems you do not own or
+# have explicit permission to test.
+name: "acme-bank-mobile"
+
+scope:                                   # fail-closed: required
+  hosts: [ "api.example.com" ]
+  paths: [ "^/v2/.*" ]
+
+vars:
+  session_key:
+    from: extraction
+    source: response
+    match: "^/auth/handshake$"
+    locate:                              # first match wins
+      - { json_path: "$.sk" }
+      - { header: "X-Session-Key" }
+    transform: [ base64_decode ]
+
+# REQUEST: client -> server
+request:
+  envelope:
+    locate: [ { in: json_field, field: "data" } ]
+  transform:
+    - base64_decode
+    - aes_decrypt: { mode: cbc, key: "${session_key}", iv: { source: prefix, length: 16 } }
+    - as_json
+  reseal:
+    - set:  { field: ts,    value: "${now_ms}" }
+    - set:  { field: nonce, value: "${random_hex(16)}" }
+    - sign: { algo: hmac_sha256, key: "${session_key}",
+              input: "${ts}${nonce}${payload_b64}", into: sign }
+    - serialize: { mode: preserve }
+
+# RESPONSE: server -> client (different cipher mode is fine)
+response:
+  envelope:
+    locate: [ { in: json_field, field: "data" } ]
+  transform:
+    - base64_decode
+    - aes_decrypt: { mode: gcm, key: "${session_key}" }
+    - as_json
+  # response.reseal is optional — enable only when modifying responses
+
+view: { pretty_json: true, diff_preview: true }
