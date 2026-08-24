@@ -28,7 +28,17 @@ one is loaded it is used automatically.
 
 ## 2. Build the extension jar
 
-Requires a JDK 17+. Gradle wrapper or a local Gradle 8:
+Requires a JDK 17+ (`javac` + `jar`). Two ways:
+
+**No Gradle needed (recommended on Windows):**
+
+```powershell
+cd burp
+powershell -ExecutionPolicy Bypass -File build.ps1
+# downloads Montoya + Gson, compiles, bundles -> build\libs\tatar-relay-burp.jar
+```
+
+**Or with Gradle 8:**
 
 ```bash
 cd burp

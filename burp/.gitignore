@@ -1,3 +1,5 @@
 .gradle/
 build/
+out/
+lib/
 !gradle/wrapper/gradle-wrapper.jar
