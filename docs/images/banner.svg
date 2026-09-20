@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <linearGradient id="vio" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.28" cy="0.45" r="0.6">
+      <stop offset="0" stop-color="#5b21b6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#0b0f14" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="lens"><circle cx="250" cy="185" r="92"/></clipPath>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="420" fill="#0b0f14"/>
+  <rect width="1200" height="420" fill="url(#glow)"/>
+  <rect x="6" y="6" width="1188" height="408" rx="14" fill="none" stroke="#2a2140" stroke-width="2"/>
+
+  <!-- faint texture: ciphertext -> plaintext motif -->
+  <g fill="#241a38" font-size="16" font-family="Consolas, monospace" opacity="0.6">
+    <text x="70" y="360">a1f9c7d8 3e0b ......  -&gt;  { "call": "balance", "amount": 100 }</text>
+    <text x="70" y="386">decrypt -&gt; edit -&gt; reseal  ::  YAML profiles  ::  JSON-RPC bridge  ::  Burp</text>
+  </g>
+
+  <!-- icon: lens + open padlock + relay cycle arrows -->
+  <g>
+    <circle cx="250" cy="185" r="92" fill="#160f24" stroke="url(#vio)" stroke-width="12"/>
+
+    <g clip-path="url(#lens)">
+      <!-- relay cycle arrows around the lock -->
+      <g fill="none" stroke="url(#vio)" stroke-width="7" stroke-linecap="round" opacity="0.85">
+        <path d="M 250 116 A 69 69 0 0 1 314 168"/>
+        <path d="M 250 254 A 69 69 0 0 1 186 202"/>
+      </g>
+      <path d="M 314 168 l 12 -20 l -24 4 z" fill="url(#vio)" opacity="0.85"/>
+      <path d="M 186 202 l -12 20 l 24 -4 z" fill="url(#vio)" opacity="0.85"/>
+
+      <!-- padlock: open shackle -->
+      <path d="M 222 176 v -14 a 28 28 0 0 1 56 -8"
+            fill="none" stroke="url(#vio)" stroke-width="12" stroke-linecap="round"/>
+      <!-- padlock body -->
+      <rect x="212" y="176" width="76" height="60" rx="12" fill="#1c1330" stroke="url(#vio)" stroke-width="8"/>
+      <!-- keyhole -->
+      <circle cx="250" cy="200" r="8" fill="url(#vio)"/>
+      <path d="M 246 205 h 8 l -2 18 h -4 z" fill="url(#vio)"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="430" y="170" font-size="104" font-weight="800" fill="#e6edf3" letter-spacing="4">TATAR</text>
+  <text x="434" y="230" font-size="46" font-weight="700" fill="#a78bfa" letter-spacing="10">RELAY</text>
+  <text x="436" y="272" font-size="23" fill="#9aa7b4">Application-layer decrypt / reseal proxy for Burp</text>
+  <text x="436" y="304" font-size="18" fill="#5b6b78" font-family="Consolas, monospace">decrypt &#8594; edit &#8594; reseal &#183; YAML profiles &#183; JSON-RPC bridge</text>
+</svg>
