@@ -19,6 +19,13 @@ from .variables import Renderer
 
 _SERIALIZE_MODES = ("preserve", "canonical", "compact")
 
+# Supported HMAC sign algorithms (backward-compatible: hmac_sha256 stays default).
+_SIGN_ALGOS = {
+    "hmac_sha256": hashlib.sha256,
+    "hmac_sha512": hashlib.sha512,
+    "hmac_sha1": hashlib.sha1,
+}
+
 
 def _to_bytes(v) -> bytes:
     if isinstance(v, (bytes, bytearray)):
@@ -65,12 +72,15 @@ class Reseal:
     def _sign(self, carrier, params, rnd: Renderer):
         _require_dict(carrier, "sign")
         algo = params.get("algo", "hmac_sha256")
-        if algo != "hmac_sha256":
-            raise DecryptError(category="config_error", message=f"unsupported sign algo: {algo}")
-        key = rnd.render(params["key"])
-        key = _to_bytes(key)
+        hashfn = _SIGN_ALGOS.get(algo)
+        if hashfn is None:
+            raise DecryptError(
+                category="config_error",
+                message=f"unsupported sign algo: {algo} "
+                        f"(supported: {', '.join(_SIGN_ALGOS)})")
+        key = _to_bytes(rnd.render(params["key"]))
         msg = rnd.render_bytes(params["input"])
-        mac = hmac.new(key, msg, hashlib.sha256).digest()
+        mac = hmac.new(key, msg, hashfn).digest()
         enc = params.get("encoding", "hex")
         carrier[params["into"]] = mac.hex() if enc == "hex" else base64.b64encode(mac).decode("ascii")
         return carrier
@@ -88,8 +98,9 @@ class Reseal:
                               ensure_ascii=False).encode("utf-8")
         if mode == "compact":
             return json.dumps(carrier, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        # preserve: keep insertion order, readable spacing
-        return json.dumps(carrier, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        # preserve: keep insertion order with standard spacing (", " / ": "),
+        # distinct from compact — matches servers that emit spaced JSON.
+        return json.dumps(carrier, separators=(", ", ": "), ensure_ascii=False).encode("utf-8")
 
 
 def _split(spec):

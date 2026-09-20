@@ -7,13 +7,16 @@ are minor; renames/removals are breaking.
 ## #1 — Profile v1 schema
 `tatar_relay/profile.py`. YAML with `name`, `scope` (fail-closed `hosts`,
 optional `paths`), `vars` (extraction + `live`), and `request`/`response`
-pipelines, each `{ envelope, transform, reseal }`. See
-`examples/acme-bank-mobile.yaml`.
+pipelines, each `{ envelope, transform, reseal }`. `envelope` may also carry
+`headers[]` — per-header sub-pipelines for the full symmetric envelope class
+(additive in v0.5). See `examples/acme-bank-mobile.yaml` and
+`examples/full-envelope.yaml`.
 
 ## #2 — Context API
 `tatar_relay/context.py`. The object every step and hook receives:
 `direction`, `channel`, `request`, `response`, `matched`, `vars`, `session`,
-`log()`, `fail()`. Per-flow state lives in `session`; module globals must not be
+`log()`, `fail()`. `HttpMessage` exposes `header()` and, additively since v0.5,
+`set_header()`. Per-flow state lives in `session`; module globals must not be
 used for state.
 
 ## #3 — Step interface

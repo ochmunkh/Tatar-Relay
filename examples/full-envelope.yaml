@@ -1,0 +1,53 @@
+# full-envelope.yaml — the "full symmetric envelope" class (Class C).
+# Illustrative example, fictional target. Authorized testing only.
+#
+# This shape encrypts the WHOLE body as one symmetric blob AND encrypts several
+# custom headers independently. It needs the AES session key established at
+# login, supplied as the `session_key` var (32 raw bytes / 64 hex):
+#
+#   relay bridge examples/full-envelope.yaml --var session_key=<hex> --capture
+#
+# Body field :  base64( 12-byte nonce || AES-GCM(ct||tag) )
+# Header field: base64( 12-byte nonce || AES-GCM(ct||tag) )   (one per header)
+name: "full-envelope"
+
+scope:
+  hosts: [ "api\\.example\\.com$" ]
+  paths: [ "^/cust-apis/" ]
+
+# REQUEST: whole body + two encrypted headers
+request:
+  envelope:
+    locate: [ { in: raw } ]
+    headers:                         # each header is its own tiny pipeline
+      - name: "X-Meta"
+        transform:
+          - base64_decode
+          - aes_decrypt: { mode: gcm, key: "${session_key}", iv: { source: prefix, length: 12 } }
+          - as_text
+      - name: "X-Op"
+        transform:
+          - base64_decode
+          - aes_decrypt: { mode: gcm, key: "${session_key}", iv: { source: prefix, length: 12 } }
+          - as_text
+  transform:
+    - base64_decode
+    - aes_decrypt: { mode: gcm, key: "${session_key}", iv: { source: prefix, length: 12 } }
+    - as_json
+  reseal:
+    - serialize: { mode: compact }
+
+# RESPONSE: body sometimes carries a constant wrapping prefix before the blob.
+# `strip_prefix` removes it declaratively (forward) and restores it (backward),
+# so no Python hook is needed just to peel a fixed header off.
+response:
+  envelope:
+    locate: [ { in: raw } ]
+  transform:
+    - base64_decode
+    # - strip_prefix: { value: "0011223344", encoding: hex }   # uncomment if a fixed prefix is present
+    - aes_decrypt: { mode: gcm, key: "${session_key}", iv: { source: prefix, length: 12 } }
+    - as_json
+  # response.reseal is optional — enable only when modifying responses
+
+view: { pretty_json: true, diff_preview: true }

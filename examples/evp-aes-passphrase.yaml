@@ -1,0 +1,31 @@
+# evp-aes-passphrase.yaml — EVP_BytesToKey/AES passphrase-mode body (Class B).
+# Illustrative example, fictional target. Authorized testing only.
+#
+# Body shape:  { "ct": base64(ciphertext), "iv": hex(iv), "s": hex(8-byte salt) }
+# Key/iv:      EVP_BytesToKey(passphrase, salt, MD5, 1 iter) → AES-256-CBC + PKCS7
+#
+# The passphrase is supplied at runtime as a var — never hardcode a secret here:
+#   relay bridge examples/evp-aes-passphrase.yaml --var ecode=str:<passphrase>
+#   (str: passes a passphrase; a bare --var value is interpreted as hex)
+name: "evp-aes-passphrase"
+
+scope:
+  hosts: [ "api\\.example\\.com$" ]
+
+request:
+  envelope:
+    locate: [ { in: raw } ]
+  transform:
+    - evp_aes_decrypt: { passphrase: "${ecode}" }   # key_size 32, hash md5 (EVP defaults)
+    - as_json
+  reseal:
+    - serialize: { mode: compact }
+
+response:
+  envelope:
+    locate: [ { in: raw } ]
+  transform:
+    - evp_aes_decrypt: { passphrase: "${ecode}" }
+    - as_json
+
+view: { pretty_json: true, diff_preview: true }

@@ -6,9 +6,10 @@ import burp.api.montoya.MontoyaApi;
 /**
  * Tatar Relay — Burp frontend (v0.2).
  *
- * Registers a request editor tab that shows the DECRYPTED plaintext of an
- * encrypted body (via the local Python bridge), lets you edit it like normal
- * HTTP in Repeater, and re-encrypts + reseals on send.
+ * Registers request AND response editor tabs that show the DECRYPTED plaintext
+ * of an encrypted body (via the local Python bridge), let you edit it like
+ * normal HTTP in Repeater, and re-encrypt + reseal on send. The response tab
+ * uses the profile's 'response' pipeline.
  *
  * Config (system properties or environment):
  *   -Dtatar.bridge=http://127.0.0.1:8799   (TATAR_BRIDGE)
@@ -29,11 +30,13 @@ public class TatarRelayExtension implements BurpExtension {
         BridgeClient bridge = new BridgeClient(bridgeUrl);
         api.userInterface().registerHttpRequestEditorProvider(
                 new RelayRequestEditorProvider(api, bridge, profile));
+        api.userInterface().registerHttpResponseEditorProvider(
+                new RelayResponseEditorProvider(api, bridge, profile));
 
         api.logging().logToOutput(
                 "Tatar Relay loaded. bridge=" + bridgeUrl
                         + " profile=" + (profile.isEmpty() ? "(single/auto)" : profile)
-                        + "\nOpen a request in Repeater and select the 'Tatar Relay' tab.");
+                        + "\nOpen a request/response in Repeater and select the 'Tatar Relay' tab.");
     }
 
     private static String prop(String sys, String env, String def) {

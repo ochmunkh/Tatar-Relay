@@ -65,10 +65,16 @@ tab: you'll see plaintext JSON. Edit it, hit **Send** — the extension
 re-encrypts and reseals automatically. If the bridge is down or the key is
 wrong, the tab shows the reason and the original request is sent unchanged.
 
+The **response** side has its own **Tatar Relay 🔓** tab: it decrypts the
+response body through the profile's `response` pipeline, so you can read (and
+edit) decrypted responses without leaving Burp. A profile with no `response`
+pipeline just shows a reason in the tab.
+
 ## Notes / roadmap
 
 - v0.2 shows a raw plaintext editor. Live Preview (per-step view) and a byte-diff
   panel are next.
-- Response editor tab, Intruder support, and in-Burp key extraction come later.
+- Response editor tab — **done** (decrypt/edit responses in Burp).
+- Intruder support and in-Burp key extraction come later.
 - The extension never sends a broken request: any bridge/pipeline error falls
   back to the original bytes and logs a reason.

@@ -11,13 +11,21 @@ Message shapes (contract):
   Core → Burp   {"ok":true,"plaintext":<json>,"ctx_token":"t-9f"}
   Burp → Core   {"method":"encrypt","channel":"request","plaintext":<json>,"ctx_token":"t-9f"}
   Core → Burp   {"ok":true,"wire":"<base64>","diff":{"changed_bytes":14}}
+
+Key capture (v0.3):
+  When the bridge is started with capture=True it also serves
+  GET /key?v=<hex>  on capture_port (default 9091).  The JS hook in
+  examples/js-hooks/session_key_capture.js calls this endpoint after
+  deriving the ECDH session key; the bridge then injects the key into
+  captured_vars so every subsequent decrypt call can use it automatically.
 """
 from __future__ import annotations
 
 import base64
+import hmac
 import json
 import secrets
-from typing import Dict
+from typing import Dict, Optional
 
 from .context import Context, HttpMessage
 from .engine import Engine
@@ -27,15 +35,37 @@ from .profile import Profile
 
 class BridgeService:
     def __init__(self, profiles: Dict[str, Profile] | None = None,
-                 default_vars: Dict[str, str] | None = None):
+                 default_vars: Dict[str, str] | None = None,
+                 token: str | None = None):
         self.profiles: Dict[str, Profile] = profiles or {}
+        # Optional shared-secret. When set, the HTTP transport requires a
+        # matching X-Relay-Token header. Default None -> no auth (unchanged
+        # behavior). The JSON-RPC message contract (#5) is untouched: auth is
+        # a transport concern, checked before handle().
+        self.token: str | None = token or None
         # default vars (name -> hex) applied to every flow; message "vars" override.
         # v0.2: the operator supplies the session key here; live extraction is v0.3.
         self.default_vars: Dict[str, str] = default_vars or {}
+        # captured_vars: populated by the JS capture hook at runtime (v0.3).
+        # These override default_vars but are overridden by per-message "vars".
+        self.captured_vars: Dict[str, str] = {}
         self._ctx: Dict[str, tuple] = {}   # ctx_token -> (ctx, engine, channel, orig_wire)
 
     def add_profile(self, profile: Profile) -> None:
         self.profiles[profile.name] = profile
+
+    def authorize(self, provided: str | None) -> bool:
+        """Transport-layer auth check. True if no token is configured, or the
+        provided value matches (constant-time). Used by serve_http."""
+        if not self.token:
+            return True
+        return bool(provided) and hmac.compare_digest(provided, self.token)
+
+    def set_captured_key(self, var_name: str, key_hex: str) -> None:
+        """Called by the key capture server when the JS hook delivers a key."""
+        self.captured_vars[var_name] = key_hex.strip().lower()
+        print(f"[tatar-relay] captured_vars['{var_name}'] updated  "
+              f"({len(key_hex)//2*8}-bit key)")
 
     def handle(self, msg: dict) -> dict:
         try:
@@ -66,9 +96,21 @@ class BridgeService:
         channel = msg.get("channel", "request")
         ctx = Context(request=HttpMessage(host=profile.scope.hosts[0]))
         vs = profile.new_varstore(ctx)
-        merged = {**self.default_vars, **(msg.get("vars") or {})}
+        merged = {**self.default_vars, **self.captured_vars, **(msg.get("vars") or {})}
         for k, v in merged.items():
-            vs.set(k, bytes.fromhex(v))
+            # var values default to HEX (session keys); prefix str:/b64:/hex:
+            # to pass a passphrase (e.g. an ecode) or other encodings.
+            if isinstance(v, (bytes, bytearray)):
+                vv = bytes(v)
+            elif isinstance(v, str) and v.startswith("str:"):
+                vv = v[4:].encode("utf-8")
+            elif isinstance(v, str) and v.startswith("b64:"):
+                vv = base64.b64decode(v[4:])
+            elif isinstance(v, str) and v.startswith("hex:"):
+                vv = bytes.fromhex(v[4:])
+            else:
+                vv = bytes.fromhex(v)
+            vs.set(k, vv)
         ctx.vars = vs
         eng = Engine(profile)
         wire = base64.b64decode(msg["wire"])
@@ -92,12 +134,51 @@ def _byte_diff(a: bytes, b: bytes) -> int:
     return n
 
 
-def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799):
-    """Minimal localhost JSON-RPC server (debug transport)."""
+def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799,
+               capture_port: Optional[int] = None,
+               capture_key_var: str = "session_key",
+               observe_path: Optional[str] = "observations.jsonl") -> None:
+    """Minimal localhost JSON-RPC server (debug transport).
+
+    If capture_port is set, also starts the JS key-capture server on that port.
+    The captured key is stored in service.captured_vars[capture_key_var]. The
+    same sidecar receives crypto observations on /observe: each distinct scheme
+    is printed once, a changed scheme is flagged NEW, and every observation is
+    appended to ``observe_path`` (JSONL) for ``relay inspect`` to merge.
+    """
     from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    # Optionally start the key-capture + observer sidecar
+    if capture_port:
+        from .capture import KeyCapture, serve_capture, ObservationLog
+        cap = KeyCapture()
+        obs_log = ObservationLog(path=observe_path)
+
+        def _on_key(hex_key: str) -> None:
+            service.set_captured_key(capture_key_var, hex_key)
+
+        def _on_observe(obs: dict, is_new: bool, summ: str) -> None:
+            tag = "⚠ NEW SCHEME" if is_new else "scheme"
+            print(f"[tatar-relay] {tag}: {summ}")
+
+        serve_capture(cap, host=host, port=capture_port, block=False,
+                      on_key=_on_key, observations=obs_log, on_observe=_on_observe)
+        print(f"tatar-relay capture  on http://{host}:{capture_port}/key  "
+              f"(var={capture_key_var!r})")
+        print(f"tatar-relay observe  on http://{host}:{capture_port}/observe  "
+              f"-> {observe_path}")
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):  # noqa: N802
+            if not service.authorize(self.headers.get("X-Relay-Token")):
+                body = b'{"ok":false,"error":{"category":"config_error",' \
+                       b'"message":"unauthorized: missing or bad X-Relay-Token"}}'
+                self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             length = int(self.headers.get("Content-Length", 0))
             try:
                 msg = json.loads(self.rfile.read(length) or b"{}")
@@ -116,5 +197,5 @@ def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799
             pass
 
     srv = HTTPServer((host, port), Handler)
-    print(f"tatar-relay bridge on http://{host}:{port}  profiles={list(service.profiles)}")
+    print(f"tatar-relay bridge   on http://{host}:{port}  profiles={list(service.profiles)}")
     srv.serve_forever()

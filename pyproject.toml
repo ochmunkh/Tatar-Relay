@@ -31,7 +31,7 @@ mitmproxy = ["mitmproxy>=10.0"]
 relay = "tatar_relay.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/EnkhbatO/tatar-relay"
+Homepage = "https://github.com/ochmunkh/Tatar-Relay"
 
 [tool.setuptools.packages.find]
 include = ["tatar_relay*"]

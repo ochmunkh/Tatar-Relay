@@ -31,6 +31,20 @@ class HttpMessage:
                 return v
         return default
 
+    def set_header(self, name: str, value: str) -> None:
+        """Set a header case-insensitively, preserving the existing key's case.
+
+        Additive to Frozen Contract #2: envelope rebuild and the header
+        sub-pipelines use this to write a re-encrypted (or decrypted) value back
+        into the message, so an edited encrypted header actually reseals.
+        """
+        low = name.lower()
+        for k in list(self.headers.keys()):
+            if k.lower() == low:
+                self.headers[k] = value
+                return
+        self.headers[name] = value
+
 
 class Context:
     """Carried through one decrypt→edit→encrypt cycle for a single flow."""

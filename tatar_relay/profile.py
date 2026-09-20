@@ -59,7 +59,7 @@ class Profile:
         self.pipelines: Dict[str, ChannelPipeline] = {}
         for channel in ("request", "response"):
             if channel in data:
-                self.pipelines[channel] = ChannelPipeline(data[channel])
+                self.pipelines[channel] = ChannelPipeline(data[channel], self.base_dir)
         if "request" not in self.pipelines:
             raise ProfileError(f"profile '{self.name}': a 'request' pipeline is required")
 
@@ -178,12 +178,18 @@ class Profile:
 
 def _has_python(data: dict) -> bool:
     for ch in ("request", "response"):
-        for step in (data.get(ch) or {}).get("transform") or []:
+        chan = data.get(ch) or {}
+        for step in chan.get("transform") or []:
             if isinstance(step, dict) and "python" in step:
                 return True
-        for step in (data.get(ch) or {}).get("reseal") or []:
+        for step in chan.get("reseal") or []:
             if isinstance(step, dict) and "python" in step:
                 return True
+        # header sub-pipelines (full-envelope class) can also carry python steps
+        for h in (chan.get("envelope") or {}).get("headers") or []:
+            for step in (h or {}).get("transform") or []:
+                if isinstance(step, dict) and "python" in step:
+                    return True
     for _, spec in (data.get("vars") or {}).items():
         if (spec or {}).get("from") == "hook":
             return True

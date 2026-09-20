@@ -15,6 +15,14 @@ from .context import Context
 from .errors import DecryptError
 
 
+def _to_header_str(payload) -> str:
+    if isinstance(payload, str):
+        return payload
+    if isinstance(payload, (bytes, bytearray)):
+        return bytes(payload).decode("utf-8", "replace")
+    return str(payload)
+
+
 class Envelope:
     def __init__(self, spec: dict | None):
         spec = spec or {}
@@ -80,7 +88,11 @@ class Envelope:
             skeleton[env["field"]] = payload
             return skeleton  # dict; reseal.serialize turns it into bytes
         if kind == "header":
-            # payload lived in a header; body is unchanged
+            # The payload lived in a header. Write the re-encrypted value back
+            # so an edit to a decrypted header actually reseals; the body is
+            # unchanged and becomes the carrier.
+            msg = ctx.response if ctx.channel == "response" else ctx.request
+            msg.set_header(env["name"], _to_header_str(payload))
             return env["body"]
         if kind == "regex":
             body = env["body"].decode("utf-8", "replace")

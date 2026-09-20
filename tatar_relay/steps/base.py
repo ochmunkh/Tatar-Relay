@@ -45,20 +45,23 @@ def register(name: str) -> Callable[[Type[Step]], Type[Step]]:
     return deco
 
 
-def build_step(spec) -> Step:
+def build_step(spec, base_dir: str = ".") -> Step:
     """Build a Step from a profile spec.
 
     A spec is either ``"base64_decode"`` (bare name) or ``{"aes_decrypt": {...}}``.
+    ``base_dir`` is the profile's directory, used to resolve Python hook files.
     """
     if isinstance(spec, str):
         name, params = spec, {}
     elif isinstance(spec, dict) and len(spec) == 1:
         name, params = next(iter(spec.items()))
-        params = params or {}
+        params = dict(params or {})
     else:
         raise ValueError(f"invalid step spec: {spec!r}")
     if name not in _REGISTRY:
         raise ValueError(f"unknown step: {name}")
+    if name == "python":
+        params.setdefault("_base_dir", base_dir)
     return _REGISTRY[name](params)
 
 

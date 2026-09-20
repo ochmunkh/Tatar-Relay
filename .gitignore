@@ -15,8 +15,28 @@ keys/
 *.wire
 !tests/golden/*.wire
 captures/
+
+# local-only profiles, hooks and tests — never in a public repo.
+# Only the whitelisted examples below are tracked; every other example
+# profile or hook is treated as private and stays out of git.
+examples/*.yaml
+!examples/acme-bank-mobile.yaml
+!examples/full-envelope.yaml
+!examples/evp-aes-passphrase.yaml
+examples/*_hook.py
+# private target tests: name them *_local.py to keep them out of a public repo
+tests/test_*_local.py
+
+# personal launcher + local paste helpers (never in public repo)
+start-bridge.local.bat
+burp_match_replace.txt
+
 # transfer artifact from the assistant
 /_relay_pkg.zip
 # gradle (burp extension)
 burp/.gradle/
 burp/build/
+
+verify-ecode.py
+sample.json
+Claude outputs/

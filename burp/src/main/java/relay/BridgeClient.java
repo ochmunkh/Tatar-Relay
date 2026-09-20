@@ -21,8 +21,20 @@ public class BridgeClient {
     private final Gson gson = new Gson();
     private final Gson pretty = new GsonBuilder().setPrettyPrinting().create();
 
+    /** Optional shared secret. Sent as the X-Relay-Token header when the bridge
+     *  is started with --token. Read from -Dtatar.relay.token or the
+     *  TATAR_RELAY_TOKEN env var; null/empty means no auth (unchanged). */
+    private final String token = firstNonEmpty(
+            System.getProperty("tatar.relay.token"),
+            System.getenv("TATAR_RELAY_TOKEN"));
+
     public BridgeClient(String url) {
         this.url = url;
+    }
+
+    private static String firstNonEmpty(String... vals) {
+        for (String v : vals) if (v != null && !v.isEmpty()) return v;
+        return null;
     }
 
     public static final class DecryptResult {
@@ -32,9 +44,11 @@ public class BridgeClient {
     }
 
     private JsonObject post(JsonObject req) throws Exception {
-        HttpRequest r = HttpRequest.newBuilder(URI.create(url))
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(10))
-                .header("Content-Type", "application/json")
+                .header("Content-Type", "application/json");
+        if (token != null) b.header("X-Relay-Token", token);
+        HttpRequest r = b
                 .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(req)))
                 .build();
         HttpResponse<String> resp = http.send(r, HttpResponse.BodyHandlers.ofString());
