@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2000 820" width="2000" height="820" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <linearGradient id="vio" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <!-- reusable mini open padlock -->
+    <g id="lock">
+      <path d="M 4 9 v -3 a 5 5 0 0 1 10 -1.5" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round"/>
+      <rect x="1" y="9" width="16" height="13" rx="3" fill="none" stroke="#c4b5fd" stroke-width="2"/>
+      <circle cx="9" cy="15" r="1.8" fill="#c4b5fd"/>
+    </g>
+  </defs>
+
+  <!-- page bg -->
+  <rect width="2000" height="820" fill="#080b11"/>
+
+  <!-- window -->
+  <rect x="40" y="36" width="1920" height="748" rx="18" fill="#0d1117" stroke="#1f2b38" stroke-width="2"/>
+
+  <!-- title bar -->
+  <circle cx="86" cy="82" r="9" fill="#ff5f56"/>
+  <circle cx="116" cy="82" r="9" fill="#ffbd2e"/>
+  <circle cx="146" cy="82" r="9" fill="#27c93f"/>
+  <text x="184" y="90" font-size="26" font-family="Consolas, monospace" fill="#c9d4e0">Burp Suite &#183; Repeater</text>
+  <g>
+    <rect x="620" y="66" width="164" height="32" rx="8" fill="#2a1f47" stroke="url(#vio)" stroke-width="1.5"/>
+    <use href="#lock" transform="translate(636,71)"/>
+    <text x="662" y="89" font-size="19" font-family="Consolas, monospace" fill="#c4b5fd">decrypted</text>
+  </g>
+  <line x1="40" y1="118" x2="1960" y2="118" stroke="#1f2b38" stroke-width="2"/>
+
+  <!-- center divider -->
+  <line x1="1000" y1="118" x2="1000" y2="784" stroke="#1f2b38" stroke-width="2"/>
+
+  <!-- ============ LEFT: REQUEST (encrypted on the wire) ============ -->
+  <g font-family="Consolas, monospace">
+    <text x="80"  y="164" font-size="21" fill="#5b6b78">Pretty</text>
+    <text x="176" y="164" font-size="21" fill="#e6edf3" font-weight="700">Raw</text>
+    <text x="248" y="164" font-size="21" fill="#5b6b78">Hex</text>
+    <line x1="168" y1="176" x2="224" y2="176" stroke="#e6edf3" stroke-width="3"/>
+
+    <text x="80" y="212" font-size="20" fill="#9aa7b4">REQUEST  &#183;  <tspan fill="#c9d4e0">POST /api/v2/login</tspan>  <tspan fill="#5b6b78">(encrypted on the wire)</tspan></text>
+
+    <g font-size="20">
+      <text x="80" y="266" fill="#7d8b99">POST /api/v2/login HTTP/2</text>
+      <text x="80" y="296" fill="#7d8b99">Host: api.example.com</text>
+      <text x="80" y="326" fill="#7d8b99">Content-Type: application/json</text>
+      <text x="80" y="356" fill="#7d8b99">X-Client: demo-app/web</text>
+    </g>
+
+    <g font-size="20" fill="#4a5b6b">
+      <text x="80" y="418">{"ct":"k4Nl338CsJ10lyrveZoqhSv3UiJmLV5DNdIfEEIl</text>
+      <text x="80" y="446">MhJa79bJhHUnUl+tHsHFj7z6Qk1pM0rC8xX2vT9wY7bN4=</text>
+      <text x="80" y="474">Zp6Lq2Rf8kD1sVhG3uJcW0eAoI5nB7tZ...",</text>
+      <text x="80" y="502">"iv":"35ea0d8540aec40f9367e7b1758880ca",</text>
+      <text x="80" y="530">"s":"0011223344556677"}</text>
+    </g>
+
+    <text x="80" y="596" font-size="19" fill="#5b6b78" font-style="italic">Ordinary Burp shows only this ciphertext &#8212; nothing to edit.</text>
+  </g>
+
+  <!-- ============ RIGHT: RESPONSE (decrypted via Tatar Relay tab) ============ -->
+  <g font-family="Consolas, monospace">
+    <text x="1040" y="164" font-size="21" fill="#5b6b78">Pretty</text>
+    <text x="1136" y="164" font-size="21" fill="#5b6b78">Raw</text>
+    <text x="1208" y="164" font-size="21" fill="#5b6b78">Hex</text>
+    <text x="1280" y="164" font-size="21" fill="#5b6b78">Render</text>
+    <text x="1392" y="164" font-size="21" fill="#c4b5fd" font-weight="700">Tatar Relay</text>
+    <use href="#lock" transform="translate(1560,148)"/>
+    <line x1="1384" y1="176" x2="1590" y2="176" stroke="url(#vio)" stroke-width="3"/>
+
+    <text x="1040" y="212" font-size="20" fill="#9aa7b4">RESPONSE  &#183;  <tspan fill="#27c93f">200 OK</tspan>  <tspan fill="#5b6b78">(decrypted by Tatar Relay)</tspan></text>
+
+    <g font-size="21">
+      <text x="1040" y="266" fill="#c9d4e0">{</text>
+      <text x="1072" y="298"><tspan fill="#79c0ff">"accounts"</tspan><tspan fill="#c9d4e0">: [</tspan></text>
+      <text x="1104" y="330" fill="#c9d4e0">{</text>
+      <text x="1136" y="362"><tspan fill="#79c0ff">"accType"</tspan><tspan fill="#c9d4e0">: </tspan><tspan fill="#7ee787">"DEPOSIT"</tspan><tspan fill="#c9d4e0">,</tspan></text>
+      <text x="1136" y="394"><tspan fill="#79c0ff">"accName"</tspan><tspan fill="#c9d4e0">: </tspan><tspan fill="#7ee787">"Future Savings"</tspan><tspan fill="#c9d4e0">,</tspan></text>
+      <text x="1136" y="426"><tspan fill="#79c0ff">"currency"</tspan><tspan fill="#c9d4e0">: </tspan><tspan fill="#7ee787">"MNT"</tspan><tspan fill="#c9d4e0">,</tspan></text>
+      <text x="1136" y="458"><tspan fill="#79c0ff">"balance"</tspan><tspan fill="#c9d4e0">: </tspan><tspan fill="#ffa657">125000.00</tspan><tspan fill="#c9d4e0">,</tspan></text>
+      <text x="1136" y="490"><tspan fill="#79c0ff">"isPrimary"</tspan><tspan fill="#c9d4e0">: </tspan><tspan fill="#ffa657">true</tspan></text>
+      <text x="1104" y="522" fill="#c9d4e0">}</text>
+      <text x="1072" y="554" fill="#c9d4e0">],</text>
+      <text x="1072" y="586"><tspan fill="#79c0ff">"status"</tspan><tspan fill="#c9d4e0">: </tspan><tspan fill="#7ee787">"OK"</tspan></text>
+      <text x="1040" y="618" fill="#c9d4e0">}</text>
+    </g>
+  </g>
+
+  <!-- footer -->
+  <line x1="40" y1="700" x2="1960" y2="700" stroke="#1f2b38" stroke-width="2"/>
+  <text x="80" y="748" font-size="20" font-family="Consolas, monospace" fill="#7d8b99">edit plaintext &#8594; Send &#8594; Tatar Relay re-encrypts + reseals <tspan fill="#5b6b78">(nonce &#183; timestamp &#183; HMAC)</tspan> automatically</text>
+</svg>

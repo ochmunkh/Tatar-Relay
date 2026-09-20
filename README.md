@@ -161,10 +161,6 @@ MIT © 2026 [Enkhbat.O](https://www.facebook.com/enkhbat.o/) — Security Analys
 
 ## Монгол
 
-<p align="center">
-  <img src="docs/images/banner.png" alt="Tatar Relay" width="880">
-</p>
-
 Олон апп нь TLS **дээр нэмээд** өөрсдийн шифрлэлтийн давхарга үүсгэдэг: Burp дээр
 харагдах body нь ойлгомжгүй blob (`base64(gzip(aes(json)))`, custom envelope,
 HMAC …) байдаг. Үүнийг тестлэхийн тулд өнөөдөр Burp-ээ орхиж, `decrypt.py`
