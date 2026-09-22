@@ -71,10 +71,10 @@ class EvpAesDecrypt(Step):
         return v if isinstance(v, (bytes, bytearray)) else str(v).encode("utf-8")
 
     def forward(self, data, ctx: Context) -> bytes:
-        raw = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else str(data)
         try:
+            raw = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else str(data)
             obj = json.loads(raw)
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise DecryptError(category="type_mismatch",
                                message=f"evp_aes_decrypt: body is not JSON: {e}",
                                step=self.name, direction="forward")

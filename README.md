@@ -139,7 +139,7 @@ loader refuses hooks unless `security.allow_python_hooks: true`). Scope is
 
 ```bash
 pip install -e .[dev]
-pytest            # 83 tests: unit + round-trip + golden regression
+pytest            # 125 tests: unit + round-trip + golden + fuzz/hostile-input
 ```
 
 ### Roadmap

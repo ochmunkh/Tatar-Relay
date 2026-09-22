@@ -4,12 +4,19 @@ from __future__ import annotations
 import base64
 import binascii
 import gzip
+import zlib
 
 from ..context import Context
 from ..datatypes import DataType
 from ..errors import DecryptError
 from ..variables import Renderer
 from .base import Step, register
+
+
+# Default output cap for size-unbounded decoders (base64, gunzip). A local tool
+# still shouldn't OOM on a hostile/oversized blob. Override per-step with
+# ``max_size`` (bytes); 0 disables the cap.
+_DEFAULT_MAX_OUTPUT = 64 * 1024 * 1024   # 64 MiB
 
 
 def _as_bytes(data) -> bytes:
@@ -25,12 +32,20 @@ class Base64Decode(Step):
     in_type = DataType.TEXT
     out_type = DataType.BYTES
 
+    def configure(self) -> None:
+        self.max_size = int(self.params.get("max_size", _DEFAULT_MAX_OUTPUT))
+
     def forward(self, data, ctx: Context) -> bytes:
         try:
-            return base64.b64decode(_as_bytes(data), validate=False)
+            out = base64.b64decode(_as_bytes(data), validate=False)
         except (binascii.Error, ValueError) as e:
             raise DecryptError(category="config_error", message=f"base64 decode: {e}",
                                step=self.name, direction="forward")
+        if self.max_size and len(out) > self.max_size:
+            raise DecryptError(category="config_error",
+                               message=f"base64 decode: output exceeds cap ({self.max_size} bytes)",
+                               step=self.name, direction="forward")
+        return out
 
     def backward(self, data, ctx: Context) -> str:
         return base64.b64encode(_as_bytes(data)).decode("ascii")
@@ -44,7 +59,7 @@ class HexDecode(Step):
     def forward(self, data, ctx: Context) -> bytes:
         try:
             return bytes.fromhex(_as_bytes(data).decode("ascii").strip())
-        except ValueError as e:
+        except (ValueError, UnicodeDecodeError) as e:
             raise DecryptError(category="config_error", message=f"hex decode: {e}",
                                step=self.name, direction="forward")
 
@@ -57,12 +72,44 @@ class Gunzip(Step):
     in_type = DataType.BYTES
     out_type = DataType.BYTES
 
+    def configure(self) -> None:
+        self.max_size = int(self.params.get("max_size", _DEFAULT_MAX_OUTPUT))
+
     def forward(self, data, ctx: Context) -> bytes:
+        raw = _as_bytes(data)
+        limit = self.max_size
+        # Streaming decompression with an output cap so a small "zip bomb" input
+        # cannot expand into unbounded memory. wbits 16 -> gzip header.
+        d = zlib.decompressobj(zlib.MAX_WBITS | 16)
+        out = bytearray()
+        pending = raw
         try:
-            return gzip.decompress(_as_bytes(data))
-        except (OSError, EOFError) as e:
+            while pending or not d.eof:
+                chunk = d.decompress(pending, 1 << 20)   # <=1 MiB per call
+                pending = d.unconsumed_tail
+                if not chunk and not pending:
+                    break                                 # done or truncated
+                out += chunk
+                if limit and len(out) > limit:
+                    raise DecryptError(
+                        category="config_error",
+                        message=f"gunzip: output exceeds cap ({limit} bytes) "
+                                f"— possible decompression bomb",
+                        step=self.name, direction="forward")
+            out += d.flush()
+            if not d.eof:
+                raise DecryptError(category="config_error",
+                                   message="gunzip: truncated or incomplete gzip stream",
+                                   step=self.name, direction="forward")
+        except (OSError, EOFError, zlib.error) as e:
             raise DecryptError(category="config_error", message=f"gunzip: {e}",
                                step=self.name, direction="forward")
+        if limit and len(out) > limit:
+            raise DecryptError(category="config_error",
+                               message=f"gunzip: output exceeds cap ({limit} bytes) "
+                                       f"— possible decompression bomb",
+                               step=self.name, direction="forward")
+        return bytes(out)
 
     def backward(self, data, ctx: Context) -> bytes:
         return gzip.compress(_as_bytes(data))
@@ -132,7 +179,12 @@ class NonceBody(Step):
         return self.nonce_length  # raw: one char per byte (latin-1)
 
     def forward(self, data, ctx: Context) -> bytes:
-        s = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else str(data)
+        try:
+            s = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else str(data)
+        except UnicodeDecodeError as e:
+            raise DecryptError(category="config_error",
+                               message=f"nonce_body: field is not UTF-8 text: {e}",
+                               step=self.name, direction="forward")
         s = s.strip()
         n = self._prefix_chars()
         if len(s) < n:

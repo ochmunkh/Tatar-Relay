@@ -6,6 +6,28 @@
 
 ---
 
+## [0.6.1] — Hardening: input caps, typed HMAC keys, fuzz tests
+
+### Нэмэгдсэн зүйлс
+- **Fuzz / hostile-input тестүүд** (`tests/test_fuzz.py`): truncated blob,
+  буруу UTF-8, non-hex/non-base64 junk, decompression bomb бүгд categorized
+  `DecryptError` шиднэ, uncaught exception гардаггүй. Нийт: **125 тест**.
+
+### Өөрчлөгдсөн / хатууруулсан
+- **`gunzip`** — streaming decompression + гаралтын хэмжээний хязгаар
+  (`max_size`, default 64 MiB) → decompression bomb-оос хамгаална; дутуу/
+  тасарсан gzip урсгалыг илрүүлж алдаа өгдөг болсон.
+- **`base64_decode`** — гаралтын хэмжээний хязгаар (`max_size`).
+- **`hmac_verify`** түлхүүр — `str:` / `hex:` / `b64:` prefix дэмжинэ (bridge-тэй
+  нэгэн адил). Bare утга урьдын адил (hex-if-valid-else-utf8) — backward compatible.
+- **`hex_decode`, `nonce_body`, `evp_aes_decrypt`** — UTF-8 биш байт орж ирэхэд
+  `UnicodeDecodeError` шидэлгүй categorized `DecryptError` буцаадаг болсон.
+
+### Засварласан
+- `auth.py` docstring: `signature_mismatch` → `signature_invalid` (код + CONTRACTS-тай нийцүүлэв).
+
+---
+
 ## [0.6.0] — Native EVP_BytesToKey passphrase mode + bridge typed vars
 
 ### Нэмэгдсэн зүйлс

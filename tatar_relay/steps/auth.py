@@ -1,7 +1,7 @@
 """Authentication / integrity steps.
 
 ``hmac_verify`` — forward: computes HMAC and compares with the expected value,
-raising ``signature_mismatch`` on failure.  backward: pass-through (re-signing
+raising ``signature_invalid`` on failure.  backward: pass-through (re-signing
 is the job of the reseal ``sign`` step).
 
 YAML spec
@@ -11,7 +11,9 @@ YAML spec
     transform:
       - hmac_verify:
           algo: sha256              # sha256 (default) | sha512 | sha1
-          key: "${session_key}"     # hex-encoded key or raw bytes var
+          key: "${session_key}"     # key var. Bare value: hex if it parses,
+                                    # else UTF-8. Force with a prefix:
+                                    #   str:<text>  hex:<hex>  b64:<base64>
           input: "${payload}"       # what to MAC over (template)
           field: "signature"        # read expected MAC from this JSON field
           # OR
@@ -49,9 +51,37 @@ _ALGOS = {
 
 
 def _to_bytes(v: Any) -> bytes:
+    """Coerce a key var to bytes.
+
+    Explicit prefixes remove the auto-hex ambiguity (mirroring the bridge's
+    --var coercion), so a raw UTF-8 key that happens to look like hex is not
+    silently halved:
+
+        str:<text>   -> UTF-8 bytes
+        hex:<hex>    -> hex-decoded
+        b64:<base64> -> base64-decoded
+
+    A bare value stays backward compatible: hex if it parses cleanly, else UTF-8.
+    """
     if isinstance(v, (bytes, bytearray)):
         return bytes(v)
     if isinstance(v, str):
+        if v.startswith("str:"):
+            return v[4:].encode("utf-8")
+        if v.startswith("hex:"):
+            try:
+                return bytes.fromhex(v[4:])
+            except ValueError as e:
+                raise DecryptError(category="config_error",
+                                   message=f"hmac_verify: bad hex key: {e}")
+        if v.startswith("b64:"):
+            try:
+                pad = (4 - len(v[4:]) % 4) % 4
+                return base64.b64decode(v[4:] + "=" * pad)
+            except Exception as e:
+                raise DecryptError(category="config_error",
+                                   message=f"hmac_verify: bad base64 key: {e}")
+        # Bare value: hex if it parses cleanly, else UTF-8 (backward compat).
         try:
             return bytes.fromhex(v)
         except ValueError:
