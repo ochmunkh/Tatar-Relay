@@ -165,6 +165,8 @@ MIT © 2026 [Enkhbat.O](https://www.facebook.com/enkhbat.o/) — Security Analys
 
 ---
 
+<a id="монгол"></a>
+
 ## Монгол
 
 Олон апп нь TLS **дээр нэмээд** өөрсдийн шифрлэлтийн давхарга үүсгэдэг: Burp дээр
