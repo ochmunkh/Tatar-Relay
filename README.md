@@ -9,6 +9,11 @@ they were plain HTTP, right inside Burp.
 
 > Stop writing `decrypt.py → edit → encrypt.py` loops for every engagement.
 
+<p align="center">
+  <img src="docs/images/relay-demo.gif" alt="Tatar Relay demo — decrypt, edit, reseal inside Burp" width="820">
+</p>
+<sub align="center">wire → decrypt → edit → reseal → 200 OK · synthetic demo data</sub>
+
 ![Request and response decrypted inside Burp](docs/images/burp-decrypt.png)
 <sub>Illustration — demo profile (`acme-bank-mobile`), synthetic data.</sub>
 
