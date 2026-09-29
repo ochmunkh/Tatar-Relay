@@ -172,20 +172,20 @@ HMAC …) байдаг. Үүнийг тестлэхийн тулд өнөөдө�
 ажиллуулж, JSON-оо гараар засаж, `encrypt.py` ажиллуулж, envelope-оо гараар
 угсардаг — target бүрт, engineer бүрт, удаа болгонд.
 
-Tatar Relay үүнийг **нэг дахин ашиглагдах профайл** болгож хураадаг. Bridge нь
-body-г автоматаар plaintext JSON болгож тайлж, чи Burp дотор энгийн request шиг
-засаад, илгээхэд буцаагаад re-encrypt + reseal (HMAC, nonce, timestamp) хийдэг —
-**request ба response** хоёуланд.
+Tatar Relay үүнийг дахин ашиглах боломжтой **нэг профайлд нэгтгэнэ**. Bridge нь
+body-г автоматаар plaintext JSON болгон тайлж, Burp дотор энгийн request шиг
+засварлах боломж олгоно. Илгээх үед нь буцаан re-encrypt + reseal (HMAC, nonce,
+timestamp) хийж, **request болон response** хоёуланг дэмжинэ.
 
 > ⚠️ **Зөвхөн зөвшөөрөлтэй тест.** Өөрийн эзэмшдэггүй, эсвэл тест хийх тодорхой
 > зөвшөөрөлгүй систем дээр бүү ашигла.
 
 ### Яагаад өөр tool биш вэ?
 
-Хэсэг бүр өөр газар байдаг — гэхдээ **нэгдсэн, config-first** хувилбар байхгүй.
+Эдгээр боломжууд тус тусдаа байдаг — харин бүгдийг нэгтгэсэн, **config-first** шийдэл байдаггүй.
 
 - **Hackvertor** Burp дотор inline крипто хийдэг ч per-request, tag-төвтэй — target
-  бүрт дахин ашиглагдах профайл, live key, cipher илрүүлэлт байхгүй.
+  бүрт дахин ашиглах профайл, live key capture, cipher илрүүлэлт байхгүй.
 - **CyberChef** transform-уудтай ч proxy биш, Burp урсгалд ороогүй.
 - **Frida** runtime дээр hook хийдэг ч edit гогцоог гараар бичсэн хэвээр.
 
@@ -206,16 +206,16 @@ pip install -e .
 # 1. bridge асаах (session key-г автоматаар барина)
 relay bridge examples/acme-bank-mobile.yaml --capture
 # 2. Burp → Extensions → Add → Java → burp/build/libs/tatar-relay-burp.jar
-# 3. examples/js-hooks/session_key_capture.js-ээ тарь, нэвтэр, дараа нь Repeater
-#    дээр request БА response-ийн "Tatar Relay 🔓" tab-ыг ашигла.
+# 3. examples/js-hooks/session_key_capture.js hook-ийг ажиллуулж, нэвтэрсний дараа
+#    Repeater дээр request БА response-ийн "Tatar Relay 🔓" tab-ыг ашигла.
 ```
 
 Алхам алхмаар (troubleshooting-той): [`docs/QUICKSTART-MN.md`](docs/QUICKSTART-MN.md).
 
-### Шифрийг таних — "энэ ямар encryption вэ?"
+### Шифрийг таних — "энэ ямар шифрлэлт вэ?"
 
-Target алгоритм солиход таамаглахгүй. JS **crypto observer** нь схемийг бодитоор
-хэлж, солигдвол шууд сэрэмжлүүлнэ. `relay inspect` нь blob-ыг таньж (урт %16,
+Target-ийн алгоритм өөрчлөгдсөн үед таамаглах шаардлагагүй. JS **crypto observer**
+нь ашиглаж буй схемийг бодитоор илрүүлж, өөрчлөгдсөн тохиолдолд шууд мэдээлнэ. `relay inspect` нь blob-ыг таньж (урт %16,
 AEAD/nonce-prefix, ECB, base64 variant, JSON талбарын дохио), live observation-ийг
 нэгтгэж **draft profile** гаргана:
 
@@ -224,12 +224,12 @@ relay inspect capture.bin --emit-profile draft.yaml --observations observations.
 relay validate draft.yaml
 ```
 
-### Хэрхэн ажилладаг — гурван фаз
+### Хэрхэн ажилладаг — гурван үе шат
 
 ```
 Wire body
-  ①  Envelope   payload-ыг олж, үлдсэнийг санана          (бүтцийн)
-  ②  Transform  base64 → gunzip → aes/chacha тайлах → json (цэвэр, урвуутай)
+  ①  Envelope   payload-ыг олж, үлдсэн бүтцийг хадгална   (бүтцийн)
+  ②  Transform  base64 → gunzip → aes/chacha тайлах → json (reversible)
         … Burp дотор plaintext JSON-оо засна …
   ②  Transform  encrypt → gzip → base64                    (урвуугаар)
   ①  Envelope   payload-ыг буцааж тавина
@@ -237,9 +237,10 @@ Wire body
 Wire body → server
 ```
 
-Transform алхмууд цэвэр, урвуутай (`decrypt(encrypt(x)) == x`). Reseal нь гарын
-үсгийг дахин бодно — JSON дахин serialize хийхэд key дараалал өөрчлөгдөж HMAC
-эвдэрдэг тул горим тодорхой: `preserve` / `canonical` / `compact`.
+Transform алхмууд нь **reversible** (`decrypt(encrypt(x)) == x`). Reseal хийх үед
+гарын үсгийг дахин тооцоолно. JSON-ийг дахин serialize хийхэд key-ийн дараалал
+өөрчлөгдөж, зөв key ашигласан ч HMAC эвдэрч болдог тул serialize хийх горимыг
+`preserve` / `canonical` / `compact` гэж тодорхой заана.
 
 ### Юу дэмждэг вэ (v0.6)
 
@@ -247,11 +248,11 @@ Transform алхмууд цэвэр, урвуутай (`decrypt(encrypt(x)) == x
   (`evp_aes_decrypt` — EVP_BytesToKey/MD5 KDF, `{ct,iv,s}` формат) — мөн Python hook-оор
   аль ч scheme (ECDH+GCM, RSA-hybrid …).
 - **Codec:** base64, hex, gzip, `nonce_body` (hex-nonce + base64 талбар), `strip_prefix`
-  (тогтмол IV / wrapping угтвар салгах) — бүгд hook-гүйгээр.
+  (тогтмол IV / wrapping угтвар салгах) — бүгдийг hook ашиглахгүйгээр дэмжинэ.
 - **Integrity:** `hmac_verify` (SHA-1/256/512); reseal HMAC sign (SHA-256/512).
 - **Envelope:** raw / json_field / header (засвар гарахдаа дахин шифрлэгдэнэ) / regex,
   мөн **header тус бүрийн дэд-pipeline** — body БА тусад нь шифрлэгдсэн header-уудыг
-  хамт задалж/засаж/дахин шифрлэнэ ("бүрэн симметрик envelope" ангилал).
+  хамтад нь тайлж, засварлаад, дахин шифрлэнэ ("бүрэн симметрик envelope" ангилал).
 - **Frontend:** Burp (request + response tab), mitmproxy addon, бүрэн CLI, JSON-RPC bridge
   (optional token, typed `--var`: `str:` / `b64:` / `hex:` / bare = hex).
 - **Detection:** live crypto observer + ухаалаг `inspect` (draft profile).
@@ -260,9 +261,10 @@ Transform алхмууд цэвэр, урвуутай (`decrypt(encrypt(x)) == x
 
 ### Аюулгүй байдал
 
-Declarative YAML хүрэлцэхгүй үед Python hook руу шилжинэ. Гэвч community профайл
-Python агуулбал дурын код ажиллах эрсдэлтэй тул итгэмжлэгдээгүй профайл заавал
-**declarative-only** (`allow_python_hooks: false` анхдагч). Scope нь **fail-closed** —
+Declarative YAML хүрэлцэхгүй үед Python hook руу шилжинэ. Гэвч community profile-д
+Python код агуулагдаж болох тул дурын код ажиллуулах эрсдэлтэй. Иймээс
+итгэмжлэгдээгүй profile нь заавал **declarative-only** байна
+(`allow_python_hooks: false` нь анхдагч тохиргоо). Scope нь **fail-closed** —
 зөвшөөрөгдсөн host байхгүй профайл ачаалахгүй.
 
 ### Лиценз
