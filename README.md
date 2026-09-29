@@ -93,6 +93,11 @@ relay inspect capture.bin --emit-profile draft.yaml --observations observations.
 relay validate draft.yaml
 ```
 
+<p align="center">
+  <img src="docs/images/relay-inspect.gif" alt="relay inspect — cipher fingerprint and draft profile" width="760">
+</p>
+<sub align="center">`relay inspect` output · synthetic capture</sub>
+
 ### How it works — three phases
 
 ```
