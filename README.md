@@ -68,7 +68,8 @@ pip install -e .            # add [mitmproxy] for the proxy frontend, [dev] for 
 ```bash
 # 1. start the bridge (auto-captures the session key)
 relay bridge examples/acme-bank-mobile.yaml --capture
-# 2. Burp → Extensions → Add → Java → burp/build/libs/tatar-relay-burp.jar
+# 2. Grab the .jar from Releases  https://github.com/ochmunkh/Tatar-Relay/releases
+#    (or build it: burp/build.ps1) → Burp → Extensions → Add → Java → the .jar
 # 3. inject examples/js-hooks/session_key_capture.js, log in, then use the
 #    "Tatar Relay 🔓" tab on request AND response in Repeater.
 ```
@@ -205,7 +206,8 @@ pip install -e .
 ```bash
 # 1. bridge асаах (session key-г автоматаар барина)
 relay bridge examples/acme-bank-mobile.yaml --capture
-# 2. Burp → Extensions → Add → Java → burp/build/libs/tatar-relay-burp.jar
+# 2. .jar-ыг Releases-ээс тат  https://github.com/ochmunkh/Tatar-Relay/releases
+#    (эсвэл burp/build.ps1-ээр build хий) → Burp → Extensions → Add → Java → тэр .jar
 # 3. examples/js-hooks/session_key_capture.js hook-ийг ажиллуулж, нэвтэрсний дараа
 #    Repeater дээр request БА response-ийн "Tatar Relay 🔓" tab-ыг ашигла.
 ```
