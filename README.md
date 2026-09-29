@@ -162,7 +162,7 @@ pytest            # 125 tests: unit + round-trip + golden + fuzz/hostile-input
   re-encrypt write-back, `strip_prefix` codec.
 - **v0.6** — native `evp_aes_decrypt` (EVP_BytesToKey/MD5 passphrase mode); bridge typed
   var coercion (`str:` / `b64:` / `hex:`); Windows console Unicode fix.
-- **next** — RSA/ECDH native derive, Intruder payload support, WebSocket, hook sandbox.
+- **next** — hook sandbox (isolate Python hooks from untrusted profiles), then RSA/ECDH native derive, Intruder payload support, WebSocket.
 
 ### License
 
