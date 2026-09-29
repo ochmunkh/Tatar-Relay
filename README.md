@@ -7,6 +7,13 @@
 **Application-Layer Protocol Adaptation Layer** — work with encrypted APIs as if
 they were plain HTTP, right inside Burp.
 
+<p align="center">
+  <a href="https://github.com/ochmunkh/Tatar-Relay/actions/workflows/ci.yml"><img src="https://github.com/ochmunkh/Tatar-Relay/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/tests-125-brightgreen" alt="tests">
+  <a href="https://github.com/ochmunkh/Tatar-Relay/releases"><img src="https://img.shields.io/github/v/release/ochmunkh/Tatar-Relay" alt="release"></a>
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
+</p>
+
 > Stop writing `decrypt.py → edit → encrypt.py` loops for every engagement.
 
 <p align="center">

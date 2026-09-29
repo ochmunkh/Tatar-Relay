@@ -1,0 +1,42 @@
+name: release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build Burp extension jar
+        run: bash .github/build-jar.sh
+
+      - name: Assemble release assets (jar + source tarball + checksums)
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          cp burp/build/libs/tatar-relay-burp.jar "dist/tatar-relay-burp-${VER}.jar"
+          # source tarball from tracked files only (no local/gitignored profiles)
+          git archive --format=tar.gz --prefix="tatar-relay-${VER}/" -o "dist/tatar-relay-${VER}.tar.gz" HEAD
+          cd dist
+          sha256sum "tatar-relay-burp-${VER}.jar" "tatar-relay-${VER}.tar.gz" > SHA256SUMS
+          echo "----- SHA256SUMS -----"; cat SHA256SUMS
+
+      - name: Publish release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/tatar-relay-burp-*.jar
+            dist/tatar-relay-*.tar.gz
+            dist/SHA256SUMS
+          generate_release_notes: true
