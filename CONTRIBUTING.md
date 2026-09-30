@@ -83,6 +83,24 @@ not tied to the Python package version.
 Building it needs a JDK, not Gradle — see [`burp/BUILD.md`](burp/BUILD.md) for
 the exact commands.
 
+## Supported Python versions
+
+`pyproject.toml` declares `requires-python = ">=3.9"`, and CI tests **3.9 and
+3.13** so that floor cannot rot. 3.9 was verified for the first time on
+2026-09-30 — 232 passed under CPython 3.9.25 — after a period where only the
+newest interpreter was exercised and the declared floor was an unchecked claim.
+
+Keeping 3.9 working in practice means:
+
+- annotations using `X | None` need `from __future__ import annotations` at the
+  top of the file (every module already has it where required);
+- no `match`/`case`, no `ExceptionGroup`/`except*`, no `tomllib`;
+- `ruff` runs with `--target-version py39`, so syntax newer than the floor is a
+  lint error as well as a test failure.
+
+If the floor is ever raised, change `requires-python`, the ruff target and the
+CI matrix together.
+
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
