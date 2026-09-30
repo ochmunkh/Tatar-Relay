@@ -20,26 +20,35 @@ sizing, not billing.
 
 ## High — operator-facing
 
-| Section | File | Words | Note |
-|---|---|---:|---|
-| *(whole file)* | `examples/js-hooks/BURP_INJECT_GUIDE.md` | 537 | The most operator-facing document in the repo: it is followed **during** an engagement to capture a session key out of a live page. Twelve short sections, mostly step-by-step, so it translates quickly and pays back immediately. |
-| *(whole file)* | `burp/README.md` | 416 | How to actually use the Burp extension — start the bridge, load the jar, use the tab. The extension is the primary frontend, so this is a first-run document. |
-| Load it into Burp | `burp/BUILD.md` §4 | ~190 | Loading and configuring, as opposed to compiling. Operator-facing even though the rest of the file is not. |
-| Verifying it loaded | `burp/BUILD.md` §4 | ~186 | Same — this is what someone reads when the tab does not appear. |
-| Troubleshooting | `burp/BUILD.md` | 93 | Read under pressure, which is exactly when a second language is a tax. |
+**Closed 2026-09-30.** All of it:
 
-**Subtotal ≈ 1,420 words.**
+| File | What was done |
+|---|---|
+| `examples/js-hooks/BURP_INJECT_GUIDE.md` | full Mongolian half — 12/12 headings, 15/15 table rows, 5/5 code blocks against the English |
+| `burp/README.md` | full Mongolian half — 6/6 headings, 5/5 code blocks |
+| `burp/BUILD.md` §4, "Verifying it loaded", Troubleshooting | full Mongolian half — 13/13 headings |
 
 ## Low — developer-facing
+
+**Closed 2026-09-30:** `CONTRIBUTING.md` gained a Mongolian section. It is a
+SUMMARY rather than a mirror — the version single-source rule, the
+no-machine-translation rule, the 3.9/3.13 floor, the three CI jobs and the scope
+rule — with a pointer to the English for the full reference. That matches how
+the Kuber repos treat CONTRIBUTING.
+
+`burp/BUILD.md` keeps a few more table rows and worked examples in English than
+in Mongolian (18 vs 11 rows, 11 vs 8 code blocks). The headings mirror exactly;
+the surplus is extra reference detail on the three build routes, not a missing
+section. Padding the Mongolian to match the count would add nothing.
+
+**Still open:**
 
 | Section | File | Words |
 |---|---|---:|
 | *(whole file)* | `CONTRACTS.md` | 362 |
-| *(whole file)* | `CONTRIBUTING.md` | 829 |
-| 1. Prerequisites / 2. Dependencies / Route A / Route B / Route C | `burp/BUILD.md` | ~657 |
-| What CI checks / What is still unverified / Notes | `burp/BUILD.md` | ~451 |
 
-**Subtotal ≈ 2,300 words.**
+`CONTRACTS.md` records the five frozen interface contracts and is read only when
+changing one of them. It is the last English-only file in the repo.
 
 ---
 

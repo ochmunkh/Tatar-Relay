@@ -1,5 +1,13 @@
 # Building the Tatar Relay Burp extension
 
+<b><a href="#english">English</a> · <a href="#монгол">Монгол</a></b>
+
+---
+
+<a id="english"></a>
+
+## English
+
 Exact, copy-pasteable steps. Three routes: **Gradle** (declarative, needs
 Gradle), **plain `javac`** (needs only a JDK — this is the one verified below),
 and **`build.ps1`** (the same `javac` route, wrapped for Windows).
@@ -270,3 +278,184 @@ contract and has **not** been run.
   the implementation Burp itself provides.
 - `lib/`, `out/` and `build/` are all git-ignored. Do not commit the downloaded
   jars or the built extension.
+
+---
+
+<a id="монгол"></a>
+
+## Монгол
+
+### 1. Урьдчилсан нөхцөл
+
+| Юу | Хувилбар | Яагаад |
+| --- | --- | --- |
+| JDK (`javac` **ба** `jar`) | 17 буюу дээш | `build.gradle` нь Java 17 toolchain тавьдаг; Burp нь Java 17+ JRE дээр ажилладаг |
+| `curl` (эсвэл дурын татагч) | аль ч | `javac` замд Maven Central-аас хоёр jar татах |
+
+```bash
+javac -version    # шалгасан: javac 21.0.10
+```
+
+Gradle **заавал биш**. Repo-д gradle wrapper байхгүй тул A зам (энгийн `javac`)
+нь баталгаажсан зам юм.
+
+### 2. Хамаарал
+
+| Хамаарал | Хувилбар | Тэмдэглэл |
+| --- | --- | --- |
+| `net.portswigger.burp.extensions:montoya-api` | `2023.12.1` | зөвхөн compile-д — Burp өөрөө runtime дээр өгнө, jar-д **багтаахгүй** |
+| `com.google.code.gson:gson` | `2.10.1` | **багтаана** — Burp үүнийг өгдөггүй |
+
+**Maven Central-аас шууд татах** (`javac` замын хийдэг зүйл):
+
+```bash
+mkdir -p lib
+curl -L -o lib/montoya-api.jar \
+  https://repo1.maven.org/maven2/net/portswigger/burp/extensions/montoya-api/2023.12.1/montoya-api-2023.12.1.jar
+curl -L -o lib/gson.jar \
+  https://repo1.maven.org/maven2/com/google/code/gson/gson/2.10.1/gson-2.10.1.jar
+```
+
+Татаж авсныхаа зөв эсэхийг дараахтай тулгаж шалгаарай:
+
+```
+140273  sha256 f7e33a403e9c3760deb727ca05ec5ca2624d0a55b44b317717d4188432d1b4b1  lib/montoya-api.jar
+283367  sha256 4241c14a7727c34feea6507ec801318a3d4a90f070e4525681079fb94ee4c593  lib/gson.jar
+```
+
+*Гүйцэтгэсэн:* хоёр `curl` командыг `repo1.maven.org` руу ажиллуулж, HTTP 200
+хариу авсан.
+
+### 3. Build
+
+#### A зам — энгийн `javac` (Linux/macOS, Gradle хэрэггүй)
+
+```bash
+cd burp
+mkdir -p out build/libs
+
+# compile — --release 17 нь JDK-аас үл хамааран bytecode түвшинг тогтооно
+javac --release 17 -Xlint:all -encoding UTF-8 \
+  -cp "lib/montoya-api.jar:lib/gson.jar" \
+  -d out $(find src/main/java -name '*.java')
+
+# Gson-ыг jar дотор багцлах (Burp үүнийг өгдөггүй); META-INF-ийг нь хаях —
+# тэнд module-info ба Maven metadata байдаг, тэдгээрийг дахин тараах хэрэггүй
+( cd out && jar xf ../lib/gson.jar )
+rm -rf out/META-INF out/module-info.class
+
+# package — Montoya НЭМЭГДЭХГҮЙ, Burp runtime дээр өгнө
+jar cf build/libs/tatar-relay-burp.jar -C out .
+```
+
+Windows дээр classpath-ийн тусгаарлагч `:` нь `;` болж, `/` нь `\` болно.
+
+#### B зам — Gradle
+
+```bash
+cd burp
+gradle build
+# -> build/libs/tatar-relay-burp.jar
+```
+
+#### C зам — `build.ps1` (Windows)
+
+`build.ps1` нь A замын ижил `javac` дарааллыг Windows-д зориулж боож өгсөн
+хувилбар. Энэ нь `C:\Program Files\...` дотроос `jar.exe` хайдаг тул Linux дээр
+ажиллахгүй.
+
+### 4. Ачаалагдаж байна уу?
+
+Хоёр өөр асуулт, хоёр өөр хариулт.
+
+#### CI автоматаар юу шалгадаг вэ
+
+`.github/test-extension.sh` (push бүр дээр `build-jar` job ажиллуулна) нь
+extension-ийг `burp/src/test/java/relay/ExtensionLoadTest.java`-тай хамт compile
+хийж ажиллуулна. Тэр тест нь жинхэнэ entry point болох
+`TatarRelayExtension.initialize(MontoyaApi)`-г **mock** `MontoyaApi` дээр дуудаж,
+дараахыг батална:
+
+- алдаа шидэлгүй дуусах;
+- өөрийгөө `Tatar Relay` гэж нэрлэх;
+- request БА response editor provider **хоёуланг** бүртгүүлэх;
+- ашиглах bridge URL ба профайлаа бичих;
+- property ч, орчны хувьсагч ч өгөөгүй үед `http://127.0.0.1:8799` руу унах.
+
+```bash
+bash .github/build-jar.sh        # -> burp/build/libs/tatar-relay-burp.jar
+bash .github/test-extension.sh   # -> RESULT  extension loads and registers correctly
+```
+
+Mock нь `java.lang.reflect.Proxy` бөгөөд дуудлага бүрийг бичиж, interface буцаах
+бүрт бичдэг proxy өгдөг. Тиймээс Mockito ч, JUnit ч хэрэггүй, мөн PortSwigger
+`MontoyaApi`-г өргөжүүлэх бүрт дахин бичих шаардлагагүй. Тестийн class-ууд
+`burp/test-out/` рүү хөрвөх бөгөөд jar-д хэзээ ч ордоггүй.
+
+Энэ бол **Montoya**-гийн entry point гэдгийг анхаараарай.
+`registerExtenderCallbacks` нь хуучин Extender API-д хамаарна; энэ extension нь
+`BurpExtension`-ыг хэрэгжүүлдэг тул Burp `initialize(MontoyaApi)`-г дууддаг.
+
+#### Юу нь хараахан шалгагдаагүй вэ
+
+**jar нь Burp дотор хэзээ ч ачаалагдаж үзээгүй.** Burp Community нь зөвхөн
+GUI-тэй — extension ачаалж, бүртгэгдсэн эсэхийг буцааж уншина гэдэг нь
+Professional/Enterprise-ийн боломж бөгөөд headless зам байхгүй, тиймээс ямар ч CI
+job үүнийг хийж чадахгүй. Mock тест нь extension-ийн өөрийн логик ажиллаж,
+бүртгүүлж байгааг батална; Burp jar-ыг хүлээж авах эсэх, editor таб зурагдах
+эсэх, bridge-ийн эргэлт ажиллах эсэхийг батлахгүй.
+
+Иймд энэ хэсгийн үлдсэн бүх зүйл Montoya API-ийн контрактаас гаралтай бөгөөд
+**ажиллуулж үзээгүй**.
+
+#### Ачаалагдсаныг шалгах
+
+1. Extension-ийн **Output** таб дээр дараах гарна:
+
+   ```
+   Tatar Relay loaded. bridge=http://127.0.0.1:8799 profile=(single/auto)
+   Open a request/response in Repeater and select the 'Tatar Relay' tab.
+   ```
+
+   `TatarRelayExtension.initialize` үүнийг `api.logging().logToOutput`-оор
+   бичдэг тул Output таб хоосон байвал entry point огт ажиллаагүй гэсэн үг.
+
+2. Extension-ийн жагсаалтад **Tatar Relay** нэрээр харагдана
+   (`api.extension().setName`).
+
+3. Scope доторх, шифрлэгдсэн body-тай request-ийг **Repeater** рүү илгээ.
+   Request болон response хоёуланд нь *Pretty* / *Raw*-ийн хажууд
+   **Tatar Relay 🔓** таб гарч ирнэ. Body хоосон биш үед л таб санал болгогддог
+   (`isEnabledFor`).
+
+4. Тэр табыг нээ. Амжилттай бол цэвэр хэлбэржүүлсэн plaintext JSON харагдана.
+   Амжилтгүй бол ч чимээгүй өнгөрөхгүй — таб нь зөвхөн уншигдах болж, шалтгааныг
+   харуулна:
+
+   ```
+   // Tatar Relay could not decrypt this request:
+   // bridge unreachable: Connection refused
+   // (is the bridge running and the key set?)
+   ```
+
+5. Plaintext-ээ засаад **Send** дар. Extension нь bridge-ээр дахин encrypt +
+   reseal хийнэ. Бүтэхгүй бол **Errors** таб руу бичээд
+   (`[tatar-relay] re-encrypt failed, sending original: ...`) анхны байтыг
+   илгээнэ — дахин угсарч чадаагүй request-ээ хэзээ ч илгээхгүй.
+
+### Асуудал шийдвэрлэх
+
+| Шинж тэмдэг | Шалтгаан | Засвар |
+| --- | --- | --- |
+| `package burp.api.montoya does not exist` | Montoya jar classpath дээр алга | `lib/montoya-api.jar`-ыг тат, `-cp`-д нэм |
+| `package com.google.gson does not exist` | Gson jar алга | `lib/gson.jar`-ыг тат |
+| Burp дээр `ClassNotFoundException: com.google.gson…` | Gson jar-д багтаагүй | `jar xf ../lib/gson.jar`-ыг `out/` дотор ажиллуулсан эсэхээ шалга |
+| Extension ачаалагдаад таб гарахгүй | Burp өөр хувилбарын Montoya-тай | `--release 17`-оор дахин build хийж, Burp-ийн log-ийг хар |
+
+### Тэмдэглэл
+
+- Montoya-г **jar-д багтаадаггүй**: Burp өөрөө runtime дээр өгдөг бөгөөд
+  багтаавал хувилбарын зөрчил үүснэ.
+- Gson-ыг багтаадаг: Burp үүнийг өгдөггүй.
+- `--release 17` нь build хийсэн JDK-аас үл хамааран bytecode түвшинг тогтооно,
+  тиймээс JDK 21 дээр build хийсэн jar Java 17 JRE дээр ажиллана.

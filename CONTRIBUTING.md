@@ -123,3 +123,73 @@ pull request, in three jobs:
 ## Licence
 
 MIT. By contributing you agree your contribution is licensed under it.
+
+---
+
+<a id="монгол"></a>
+
+## Монгол
+
+Энэ баримтын англи хэсэг нь бүрэн лавлагаа. Доорх нь хамгийн чухал дүрмүүдийн
+хураангуй — дэлгэрэнгүйг дээрээс уншина уу.
+
+### Орчин бэлдэх
+
+```bash
+git clone https://github.com/ochmunkh/Tatar-Relay
+cd Tatar-Relay
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q
+```
+
+### Хувилбарын НЭГ эх сурвалж
+
+**`tatar_relay/__init__.py`-ийн `__version__` бол цорын ганц эрх бүхий эх
+сурвалж.** `pyproject.toml` нь түүнээс уншдаг (`version = { attr = ... }`), мөн
+`CHANGELOG.md`-ийн хамгийн сүүлийн гарсан гарчиг, git tag бүгд түүнтэй таарна.
+`tests/test_version.py` эдгээрийг тулгаж шалгах тул зөрвөл CI унана.
+
+Хувилбар ахиулах дараалал: `__version__`-ыг өөрчлөх → `CHANGELOG.md`-д шинэ
+гарчиг нэмэх → `pytest -q` ногоон эсэхийг шалгах → merge хийсний дараа
+`git tag vX.Y.Z`.
+
+### Баримт
+
+README нь хоёр хэлтэй бөгөөд хоёр хэсгийн **бүтэц** таарах ёстой —
+`tools/readme_parity.py` үүнийг CI дээр шалгана. Нэг талд хэсэг, хүснэгт, кодын
+блок нэмбэл нөгөөд нь ч нэм.
+
+**Монгол текстийг машинаар орчуулж БОЛОХГҮЙ.** Дутуу байвал англиар үлдээж,
+`docs/TRANSLATION_NEEDED.md`-д тэмдэглэ — муу монгол бичихээс ил тод дутагдал нь
+дээр.
+
+Тестийн тоо README-д бичигдсэн байдаг ба `tests/test_docs_consistency.py` нь
+pytest-ийн бодитоор цуглуулсан тоотой тулгадаг. Тест нэмбэл тэр тоог бас шинэчил.
+
+### Дэмжигдэх Python хувилбар
+
+`pyproject.toml` нь `requires-python = ">=3.9"` гэж зарласан бөгөөд CI нь **3.9
+ба 3.13** хоёуланг тестлэдэг тул тэр доод хязгаар хуучрахгүй. 3.9-д ажиллуулахын
+тулд:
+
+- `X | None` хэлбэрийн annotation-тай файл бүр эхэндээ
+  `from __future__ import annotations` агуулна;
+- `match`/`case`, `ExceptionGroup`/`except*`, `tomllib` хэрэглэхгүй;
+- `ruff` нь `--target-version py39`-ээр ажилладаг тул доод хязгаараас шинэ
+  syntax нь lint алдаа болно.
+
+### CI
+
+`ci.yml` нь push ба pull request бүр дээр гурван job ажиллуулна: `lint`
+(ruff + README parity), `test` (3.9/3.13 matrix дээр pytest), `build-jar` (Burp
+extension-ыг compile хийж, mock ачаалалтын тест ажиллуулна).
+
+### Өөрчлөлтийн хүрээ
+
+Нэг PR — нэг сэдэв. Крипто алгоритмын өөрчлөлт бүр тесттэй байна. Эвдэрсэн
+тесттэй commit хийхгүй.
+
+### Лиценз
+
+MIT. Хувь нэмэр оруулснаар өөрийн кодоо MIT-ээр гаргахыг зөвшөөрч байна.
