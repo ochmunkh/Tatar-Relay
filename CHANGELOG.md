@@ -62,7 +62,7 @@
   the plain-`javac` route, how to load the jar in Burp and how to verify it
   loaded, and marks which steps are verified and which are not.
 
-### Үөрчлөгдсөн / хатууруулсан
+### Өөрчлөгдсөн / хатууруулсан
 - **Key capture sidecar-ын нээлттэй байдлыг багасгасан.** `/status` нь
   session key-г буцаахаа больсон (`{"ok":true,"ready":…}` болсон) — sidecar нь
   cross-origin зөвшөөрдөг тул тестерийн browser-т нээлттэй дурын хуудас
@@ -97,9 +97,10 @@
 <!-- TODO(mn): English placeholder — needs an idiomatic Mongolian translation. -->
 - **`serve_capture`'s `"HTTPServer"` return annotation** was a dangling forward
   reference: `http.server` is imported inside the function body, so the name was
-  never visible at module level and `typing.get_type_hints` (and the new CI
-  linter) rejected it. Declared under `TYPE_CHECKING`; the lazy runtime import
-  is unchanged.
+  never visible at module level and the new CI linter rejected it (F821).
+  Declared under `TYPE_CHECKING`; the lazy runtime import is unchanged. Note
+  this does not make `typing.get_type_hints(serve_capture)` resolve — the import
+  only runs under `TYPE_CHECKING`, so at runtime the name is still absent.
 - **`relay --version`** хуучин тоо хэвлэхээ больсон. `pyproject.toml` ба
   `tatar_relay/__init__.py` хоёр тусдаа `0.1.0` гэж бичигдсэн байсан;
   одоо `__version__` нэг л удаа бичигдэж, pyproject түүнийг уншдаг болсон.

@@ -33,8 +33,13 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     # serve_capture imports http.server lazily — the sidecar is optional and
     # importing a server module at package import time is not free. The name
-    # still has to be visible here or its "HTTPServer" return annotation is a
-    # dangling forward reference (get_type_hints and linters both flag it).
+    # still has to be visible here or linters flag its "HTTPServer" return
+    # annotation as an undefined name (F821).
+    #
+    # This does NOT make typing.get_type_hints(serve_capture) work: the import
+    # only runs under TYPE_CHECKING, so at runtime the name is genuinely absent
+    # and get_type_hints still raises NameError. Anything needing the resolved
+    # hint has to import http.server itself first.
     from http.server import HTTPServer
 
 
