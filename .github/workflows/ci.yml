@@ -1,5 +1,13 @@
 name: CI
 
+# Both sides of the 2026-09-30 merge added a CI workflow independently, and they
+# covered different things, so this is the union rather than a choice:
+#   from origin/main — the build-jar job, which compiles the Burp extension on
+#                      every push. Nothing else here would have caught the jar
+#                      breaking, and release.yml depends on the same script.
+#   from this branch — least-privilege permissions, the pinned error-only lint,
+#                      the bilingual README parity gate, the [dev] extra, and
+#                      triggering on every branch rather than only main.
 on:
   push:
   pull_request:
@@ -9,6 +17,7 @@ permissions:
 
 jobs:
   test:
+    name: Python tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +30,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      # Installing the package (not just its dependencies) is what lets
+      # tests/test_version.py check the INSTALLED distribution metadata against
+      # __version__; without it that test skips itself.
       - name: Install
         run: |
           python -m pip install --upgrade pip
@@ -43,3 +55,15 @@ jobs:
 
       - name: Tests
         run: pytest -q
+
+  build-jar:
+    name: Burp extension builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Compile jar
+        run: bash .github/build-jar.sh

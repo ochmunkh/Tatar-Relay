@@ -34,7 +34,15 @@ LINK_SOURCES = ["README.md", "CONTRACTS.md", "CHANGELOG.md", "CONTRIBUTING.md"] 
     f"docs/{p.name}" for p in sorted((ROOT / "docs").glob("*.md"))
 ]
 
-_COUNT_CLAIM = re.compile(r"(\d+)\s*(?:tests|test|тест)\b")
+# Two shapes of claim:
+#   prose  "232 tests", "232 тест"        -> digits BEFORE the word
+#   badge  "badge/tests-232-brightgreen"  -> digits AFTER it
+# The badge form arrived with the CI/release commit from origin/main carrying a
+# stale 125, and the prose-only pattern did not see it.
+_COUNT_CLAIM = re.compile(
+    r"(?:(\d+)\s*(?:tests|test|тест)\b"
+    r"|(?:tests|test|тест)-(\d+)(?:-|\b))"
+)
 _LINK = re.compile(r"\[`([^`]+)`\]\(([^)]+)\)")
 
 
@@ -55,7 +63,8 @@ def test_test_count_claims_match_what_pytest_collects(full_suite_test_count):
     # only the newest changelog entry: older entries are a historical record
     sources.append(("CHANGELOG.md (newest entry)", _newest_changelog_entry()))
     for name, text in sources:
-        for claimed in _COUNT_CLAIM.findall(text):
+        for before, after in _COUNT_CLAIM.findall(text):
+            claimed = before or after
             if int(claimed) != actual:
                 wrong.append(f"{name}: claims {claimed}")
     assert not wrong, (
