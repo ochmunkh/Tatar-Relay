@@ -37,7 +37,7 @@ class ChaCha20Decrypt(Step):
                                message="chacha20_decrypt: 'key' is required")
         self.nonce_len = int(self.params.get("nonce_length", 12))
 
-    def forward(self, data: Any, ctx: Context) -> bytes:
+    def forward(self, data: bytes, ctx: Context) -> bytes:
         """Decrypt direction: ciphertext → plaintext."""
         rnd = Renderer(ctx.vars)
         raw_key = rnd.render(self.params["key"])
@@ -69,7 +69,7 @@ class ChaCha20Decrypt(Step):
 `tatar_relay/steps/__init__.py`:
 
 ```python
-from . import codecs, crypto, structural, pyhook, auth, chacha  # noqa: F401
+from . import codecs, crypto, structural, pyhook, auth, chacha, kdf  # noqa: F401
 ```
 
 ### A-3. Тест бичих
@@ -151,7 +151,7 @@ from tatar_relay.context import Context
 import os, json
 
 
-def decrypt(data: bytes, ctx: Context, params: dict) -> dict:
+def decrypt(data: bytes, ctx: Context) -> dict:
     """forward: wire bytes → plaintext dict"""
     import base64
     body = json.loads(data)
@@ -174,7 +174,7 @@ def decrypt(data: bytes, ctx: Context, params: dict) -> dict:
     return json.loads(plaintext)
 
 
-def encrypt(data: dict, ctx: Context, params: dict) -> bytes:
+def encrypt(data: dict, ctx: Context) -> bytes:
     """backward: plaintext dict → wire bytes"""
     import base64
     plaintext = json.dumps(data).encode()

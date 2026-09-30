@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tatar-relay"
-version = "0.1.0"
+dynamic = ["version"]        # read from tatar_relay.__version__ (single source)
 description = "Application-Layer Protocol Adaptation Layer — turn encrypted APIs into editable HTTP for security testing"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -32,6 +32,9 @@ relay = "tatar_relay.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ochmunkh/Tatar-Relay"
+
+[tool.setuptools.dynamic]
+version = { attr = "tatar_relay.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["tatar_relay*"]

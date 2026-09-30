@@ -12,7 +12,7 @@
 pip install tatar-relay        # PyPI-ээс (ирэх хувилбар)
 # Эсвэл эх кодоос
 git clone https://github.com/ochmunkh/Tatar-Relay
-cd tatar-relay
+cd Tatar-Relay
 pip install -e ".[dev]"
 ```
 
@@ -46,16 +46,32 @@ request:
 ### Profile шалгах
 
 ```bash
-tatar-relay validate profiles/my-api.yaml
+relay validate profiles/my-api.yaml
+```
+
+### Барьсан body-г шууд тайлах (proxy байхгүй)
+
+```bash
+relay run profiles/my-api.yaml -i captured.bin --var session_key=<hex>
 ```
 
 ### Proxy ажиллуулах
 
+Relay өөрөө proxy болж сонсдоггүй — frontend хоёрын нэгийг асаана:
+
 ```bash
-tatar-relay run --profile profiles/my-api.yaml --port 8080
+# Burp: JSON-RPC bridge (extension нь 8799-г хайдаг)
+relay bridge profiles/my-api.yaml --capture
+
+# mitmproxy addon
+TATAR_RELAY_PROFILE=profiles/my-api.yaml \
+  mitmdump -s tatar_relay/frontends/mitmproxy_addon.py
 ```
 
-Burp Suite-д proxy `127.0.0.1:8080` руу чиглүүлнэ. Шифрлэгдсэн request ирэхэд Relay тайлж өгч, хариуг дахин шифрлэн буцаана.
+Burp extension нь bridge-ийг `127.0.0.1:8799`-аас хайна (Burp-ийн proxy порт
+биш) — Repeater дээрх `Tatar Relay 🔓` tab дотор plaintext харагдана. mitmproxy
+addon нь scope-д тохирсон request-ийг тайлж лог бичнэ, `TATAR_RELAY_REWRITE`
+тохируулсан бол дахин шифрлэж цааш дамжуулна.
 
 ---
 
@@ -336,6 +352,10 @@ transform:
 | `tag_mismatch` | AES-GCM authentication tag буруу |
 | `wrong_key_size` | Key урт буруу |
 | `locate_failed` | Envelope locate strategy тохирсонгүй |
+| `decode_failed` | Codec/угтвар энэ мессежийг уншиж чадсангүй (base64/hex/gzip/угтвар) |
+| `extraction_failed` | Хувьсагчийг handshake-ээс авах locate тохирсонгүй |
+| `scope_violation` | Host/path profile-ын зөвшөөрөгдсөн scope-аас гадна |
+| `profile_invalid` | Profile өөрөө ачаалагдахгүй / буруу |
 | `config_error` | Profile тохиргоо буруу |
 | `internal` | Ангилагдаагүй алдаа |
 
@@ -343,11 +363,33 @@ transform:
 
 ## 8. CLI Тушаалууд
 
+Бинарын нэр нь `relay` (`pyproject.toml` → `[project.scripts]`). Бүрэн спискийг
+`relay --help`, тушаал тус бүрийг `relay <тушаал> --help`-ээс харна.
+
 ```bash
-tatar-relay validate <profile.yaml>    # profile шалгана
-tatar-relay run --profile <file> --port <N>
-tatar-relay inspect --profile <file> --request <file>
+relay preview <profile.yaml> -i <wire.bin>   # алхам тутам тайлж харах (debug)
+relay validate <profile.yaml>                # profile шалгана (+ --sample round-trip)
+relay run <profile.yaml> -i <wire.bin>       # барьсан body-г тайлна (+ --roundtrip)
+relay steps                                  # боломжтой transform step-үүд
+relay inspect <wire.bin> --emit-profile <draft.yaml>   # шифр таниж draft гаргана
+relay init --name <target>                   # profile + hook загвар бичнэ
+relay decrypt-field --key <hex> --field <value>        # нэг талбар тайлах (ECDH-GCM)
+relay bridge <profile.yaml> --capture        # Burp extension-д зориулсан JSON-RPC bridge
+relay capture --port 9091                    # session key-г хүлээж аваад хэвлэнэ
 ```
+
+`run` / `preview` / `validate` гурав нийтлэг flag-тай:
+
+```bash
+--channel request|response   # аль талын pipeline (default: request)
+--var name=HEX               # хувьсагч; bare нь hex, эсвэл str: / b64: / hex:
+--host api.example.com       # profile-ын scope-той шалгана (fail-closed)
+--path /v2/pay               # scope-ын paths: regex-ийг ч шалгана
+```
+
+> Хагас ажиллаж байгаа profile-ыг засахад `relay preview` хамгийн тустай:
+> envelope.locate-ээс эхлээд step бүрийн гаралтыг дарааллаараа харуулна,
+> тул аль step дээр задрахаа шууд харагдана.
 
 > **Burp дотор ашиглах бүрэн урсгал** (bridge асаах, jar ачаалах, key барих,
 > request/response задлах, алдаа шийдэх) — [`QUICKSTART-MN.md`](QUICKSTART-MN.md)-г үз.

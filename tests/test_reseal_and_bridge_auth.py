@@ -1,9 +1,17 @@
-"""Tests for the v0.1.1 correctness fixes:
+"""Reseal signing, serialize modes, and bridge token auth.
 
-  1. reseal `sign` supports hmac_sha512 / hmac_sha1 (was hmac_sha256-only,
-     while the docs claimed sha512 support).
-  2. serialize `preserve` is now distinct from `compact` (spaced JSON).
-  3. bridge optional shared-secret auth (X-Relay-Token), default off.
+Named for its subjects, not for the release that happened to introduce them
+(it was `test_v011_fixes.py`, a version that appears nowhere else in the repo) —
+so that the next person adding a sign-algorithm or serialize-mode test finds it.
+
+Three subjects, 8 test functions:
+
+  1. reseal `sign` — the algorithm table (hmac_sha256/512/1) and its key
+     coercion. This is the ONLY coverage of `hmac_sha512`/`hmac_sha1` anywhere
+     in the suite, so do not thin it.
+  2. serialize `preserve` vs `compact` — `preserve` is spaced JSON, and nothing
+     else asserts on the difference (other files only use it inside a profile).
+  3. `BridgeService.authorize` — likewise the only coverage of bridge auth.
 """
 import hashlib
 import hmac as _hmac
@@ -55,6 +63,38 @@ def test_sign_rejects_unknown_algo():
     with pytest.raises(DecryptError) as e:
         reseal.apply({"data": "x"}, b"body", _ctx())
     assert e.value.category == "config_error"
+
+
+def test_sign_reads_a_hex_string_key_the_same_way_hmac_verify_does():
+    """A hex *string* key must sign with the same bytes hmac_verify checks with.
+
+    `hmac_verify` and reseal `sign` are the two ends of one round-trip. They had
+    two different coercion rules, so a profile that extracted `session_key` from
+    a JSON handshake field without `transform: [ base64_decode ]` got a str:
+    hmac_verify validated with 32 hex-decoded bytes while sign re-signed with 64
+    UTF-8 ones. The operator saw `signature_invalid` or a server 401 with no hint
+    that the key had been read two different ways. Both now go through
+    variables.coerce_key, so this asserts they agree.
+    """
+    import json
+    from tatar_relay.steps.auth import _to_bytes
+
+    key_hex = bytes(range(32)).hex()          # 64 chars of clean hex
+    payload = b'{"amount":100}'
+
+    def sig(key):
+        out = Reseal([
+            {"sign": {"algo": "hmac_sha256", "key": "${session_key}",
+                      "input": "${payload}", "into": "sig"}},
+            {"serialize": {"mode": "compact"}},
+        ]).apply({"data": "x"}, payload, _ctx(key))
+        return json.loads(out)["sig"]
+
+    # the string and its decoded bytes must produce one MAC, not two
+    assert sig(key_hex) == sig(bytes.fromhex(key_hex))
+    # ...and that MAC is the one hmac_verify's own key rule produces
+    assert sig(key_hex) == _hmac.new(_to_bytes(key_hex), payload,
+                                     hashlib.sha256).hexdigest()
 
 
 def test_sha512_differs_from_sha256():

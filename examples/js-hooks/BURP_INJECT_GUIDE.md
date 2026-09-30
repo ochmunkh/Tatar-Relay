@@ -96,9 +96,11 @@ The simplest approach for one-off testing:
 ## Verify capture
 
 ```bash
-# Check if the key arrived
+# Check if the key arrived (readiness only — /status never returns the key:
+# the sidecar allows cross-origin requests, so any page open in the same
+# browser could otherwise read the live session key out of it)
 curl http://127.0.0.1:9091/status
-# → {"ok":true,"ready":true,"key":"a3f4c7d8..."}
+# → {"ok":true,"ready":true}
 
 # Or watch relay capture output
 relay capture --port 9091

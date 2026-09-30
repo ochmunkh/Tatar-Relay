@@ -14,11 +14,18 @@ JS hook sends:
     GET http://127.0.0.1:9091/key?v=<64-hex-chars>
     POST http://127.0.0.1:9091/key   body: hex or {"v":"hex"}
 
-Status check:
-    GET http://127.0.0.1:9091/status
+Status check (readiness only — never the key itself):
+    GET http://127.0.0.1:9091/status   -> {"ok":true,"ready":true|false}
+
+Exposure note: this sidecar deliberately allows cross-origin requests so the
+injected page hook can reach ``/key`` and ``/observe``. It therefore must not
+hand anything secret back: ``/status`` reports readiness only, and CORS is sent
+on ``/key``/``/observe`` alone. ``/reset`` and ``/schemes`` change or read
+capture state, so they honour an optional ``token`` (``X-Relay-Token``).
 """
 from __future__ import annotations
 
+import hmac
 import json
 import threading
 from typing import Optional
@@ -160,8 +167,9 @@ def serve_capture(
     on_key: Optional[callable] = None,
     observations: Optional["ObservationLog"] = None,
     on_observe: Optional[callable] = None,
-) -> None:
-    """Start the capture HTTP server.
+    token: Optional[str] = None,
+) -> "HTTPServer":
+    """Start the capture HTTP server; returns the HTTPServer.
 
     Parameters
     ----------
@@ -170,30 +178,62 @@ def serve_capture(
     block:    If True, run in this thread (serve_forever).
               If False, start a daemon thread and return immediately.
     on_key:   Optional callback(key_hex: str) called when a valid key arrives.
+    token:    Optional shared secret required (as ``X-Relay-Token``) on the
+              control endpoints ``/reset`` and ``/schemes``. Default None keeps
+              the previous behaviour. The sidecar holds no BridgeService, so the
+              secret is passed in rather than read off one.
+
+    Returns the ``HTTPServer`` so a caller (or a test) can shut it down; the
+    existing callers ignore it and are unaffected.
     """
     from http.server import BaseHTTPRequestHandler, HTTPServer
     from urllib.parse import urlparse, parse_qs
 
     _on_key = on_key          # closure
     _on_observe = on_observe  # closure
+    _token = token or None    # closure
 
     class _Handler(BaseHTTPRequestHandler):
+        # The only two endpoints the injected page hook calls cross-origin, and
+        # so the only two that may advertise CORS — on the preflight as well as
+        # on the response, or the preflight promises what the response denies.
+        _CORS_PATHS = frozenset({"/key", "/observe"})
+
         def _cors(self) -> None:
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
-        def _send_json(self, code: int, body: bytes) -> None:
+        def _send_json(self, code: int, body: bytes, *, cors: bool = False) -> None:
+            """``cors`` only for the two endpoints a target page must reach.
+
+            Wildcard CORS on every response is what let any page in the
+            operator's browser read this server's answers; only /key and
+            /observe are called cross-origin, so only they advertise it.
+            """
             self.send_response(code)
-            self._cors()
+            if cors:
+                self._cors()
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
 
+        def _authorized(self) -> bool:
+            """Constant-time check for the control endpoints; open if unset."""
+            if not _token:
+                return True
+            provided = self.headers.get("X-Relay-Token")
+            return bool(provided) and hmac.compare_digest(provided, _token)
+
+        def _deny(self) -> None:
+            self._send_json(401, b'{"ok":false,"error":"unauthorized: missing or '
+                                 b'bad X-Relay-Token"}')
+
         def do_OPTIONS(self) -> None:   # noqa: N802  preflight
             self.send_response(200)
-            self._cors()
+            if urlparse(self.path).path in self._CORS_PATHS:
+                self._cors()
             self.end_headers()
 
         def do_GET(self) -> None:  # noqa: N802
@@ -205,16 +245,20 @@ def serve_capture(
                            params.get("key") or [""])[0]
                 self._handle_key(key_hex)
             elif parsed.path == "/status":
-                kh = capture.hex()
-                body = (json.dumps({"ok": True,  "ready": True,  "key": kh})
-                        if kh else
-                        json.dumps({"ok": True,  "ready": False, "key": None})
-                        ).encode()
+                # Readiness ONLY. This body used to carry the live session key,
+                # which wildcard CORS then served to any origin; `relay capture`
+                # prints the key locally (cli.py cmd_capture) instead.
+                body = json.dumps({"ok": True,
+                                   "ready": bool(capture.hex())}).encode()
                 self._send_json(200, body)
             elif parsed.path == "/reset":
+                if not self._authorized():
+                    return self._deny()
                 capture.reset()
                 self._send_json(200, b'{"ok":true,"message":"reset"}')
             elif parsed.path == "/schemes":
+                if not self._authorized():
+                    return self._deny()
                 schemes = observations.schemes() if observations else []
                 self._send_json(200, json.dumps({"ok": True, "schemes": schemes}).encode())
             else:
@@ -249,9 +293,10 @@ def serve_capture(
                             _on_observe(obs, is_new, summ)
                         except Exception:  # noqa: BLE001
                             pass
-                    self._send_json(200, b'{"ok":true}')
+                    self._send_json(200, b'{"ok":true}', cors=True)
                 else:
-                    self._send_json(400, b'{"ok":false,"error":"no observation"}')
+                    self._send_json(400, b'{"ok":false,"error":"no observation"}',
+                                    cors=True)
             else:
                 self.send_response(404)
                 self.end_headers()
@@ -264,7 +309,7 @@ def serve_capture(
                 except Exception:  # noqa: BLE001
                     pass
             body = b'{"ok":true}' if ok else b'{"ok":false,"error":"invalid key"}'
-            self._send_json(200 if ok else 400, body)
+            self._send_json(200 if ok else 400, body, cors=True)
 
         def log_message(self, *_):  # silence default stderr logging
             pass
@@ -275,3 +320,4 @@ def serve_capture(
     else:
         t = threading.Thread(target=srv.serve_forever, daemon=True, name="tatar-capture")
         t.start()
+    return srv

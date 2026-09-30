@@ -1,7 +1,11 @@
-"""Command-line interface: run · validate · init · inspect · preview.
+"""Command-line interface: run · validate · preview · steps · init · inspect.
 
 The CLI lets you exercise the core with no proxy at all — the fastest way to
 prove a profile works and to run it in CI.
+
+Authoring mistakes are reported, never raised: a step-name typo, an unreadable
+or malformed profile, and a bad ``--var`` each exit with one actionable line
+instead of a traceback (``main`` is the backstop for the rest).
 """
 from __future__ import annotations
 
@@ -10,31 +14,37 @@ import json
 import sys
 from typing import Optional
 
+import yaml
+
 from . import __version__
 from .context import Context, HttpMessage
-from .errors import RelayError, DecryptError
+from .errors import DecryptError, ProfileError, RelayError
+from .engine import _attach_logs
 from .inspect import analyze, fingerprint, draft_profile, load_observations
 from .profile import Profile
-from .variables import VarStore
+from .variables import coerce_key
 
 
-def _build_ctx(profile: Profile, host: str, overrides: list) -> Context:
-    ctx = Context(request=HttpMessage(host=host or (profile.scope.hosts[0] if profile.scope.hosts else "")))
+def _build_ctx(profile: Profile, host: str, overrides: list, path: str = "") -> Context:
+    if host:
+        # --host was given explicitly, so authorize it fail-closed rather than
+        # trusting it. The path half is only checked when --path was supplied:
+        # defaulting it to "/" would reject every profile with a `paths:` regex,
+        # e.g. `relay run examples/acme-bank-mobile.yaml --host api.example.com`.
+        profile.authorize(host, path or None)
+    ctx = Context(request=HttpMessage(
+        host=host or (profile.scope.hosts[0] if profile.scope.hosts else ""),
+        path=path))
     vs = profile.new_varstore(ctx)
     for ov in overrides or []:
         name, _, val = ov.partition("=")
-        val = val.strip()
+        name = name.strip()
         # default HEX; prefix str:/b64:/hex: for passphrases or other encodings
-        if val.startswith("str:"):
-            vv = val[4:].encode("utf-8")
-        elif val.startswith("b64:"):
-            import base64
-            vv = base64.b64decode(val[4:])
-        elif val.startswith("hex:"):
-            vv = bytes.fromhex(val[4:])
-        else:
-            vv = bytes.fromhex(val)
-        vs.set(name.strip(), vv)
+        try:
+            vv = coerce_key(val.strip(), f"--var {name}", bare="hex")
+        except DecryptError as e:
+            raise ProfileError(e.message)
+        vs.set(name, vv)
     ctx.vars = vs
     return ctx
 
@@ -50,7 +60,7 @@ def cmd_run(args) -> int:
     profile = Profile.load(args.profile)
     from .engine import Engine
     eng = Engine(profile)
-    ctx = _build_ctx(profile, args.host, args.var)
+    ctx = _build_ctx(profile, args.host, args.var, args.path)
     wire = _read(args.input)
     plain = eng.decrypt(args.channel, wire, ctx)
     out = json.dumps(plain, indent=2, ensure_ascii=False) if isinstance(plain, (dict, list)) \
@@ -67,15 +77,36 @@ def cmd_preview(args) -> int:
     """Step-by-step decrypt view (CLI Live Preview)."""
     profile = Profile.load(args.profile)
     pipe = profile.pipeline(args.channel)
-    ctx = _build_ctx(profile, args.host, args.var)
+    if pipe is None:
+        raise ProfileError(
+            f"profile '{profile.name}': no '{args.channel}' pipeline to preview "
+            f"(this profile defines: {', '.join(profile.pipelines) or 'none'})")
+    ctx = _build_ctx(profile, args.host, args.var, args.path)
     ctx.channel = args.channel
     ctx.direction = "forward"
     data = pipe.envelope.locate(_read(args.input), ctx)
     print(f"envelope.locate  -> {_short(data)}")
+    seen = _drain_logs(ctx, 0)
     for step in pipe.transform:
-        data = step.forward(data, ctx)
+        try:
+            data = step.forward(data, ctx)
+        except DecryptError as e:
+            # preview calls steps directly, bypassing Engine._run, so nothing
+            # else would carry the failing step's ctx.log() breadcrumbs out to
+            # main's handler — which is precisely when they are wanted.
+            _attach_logs(e, ctx, seen)
+            raise
         print(f"{step.name:<14} -> {_short(data)}")
+        seen = _drain_logs(ctx, seen)
     return 0
+
+
+def _drain_logs(ctx: Context, seen: int) -> int:
+    """Print whatever the last step wrote with ``ctx.log()`` (Contract #2)."""
+    logs = ctx.logs
+    for level, msg in logs[seen:]:
+        print(f"{'':<14}    · {level}: {msg}")
+    return len(logs)
 
 
 def cmd_validate(args) -> int:
@@ -94,11 +125,24 @@ def cmd_validate(args) -> int:
     if args.sample:
         from .engine import Engine
         eng = Engine(profile)
-        ctx = _build_ctx(profile, args.host, args.var)
+        ctx = _build_ctx(profile, args.host, args.var, args.path)
         sample = json.loads(_read(args.sample))
         wire = eng.encrypt(args.channel, sample, ctx)
         back = eng.decrypt(args.channel, wire, ctx)
         print(f"✓ Round-trip: {'passed' if back == sample else 'FAILED'}")
+    return 0
+
+
+def cmd_steps(args) -> int:
+    """Print the transform vocabulary, so it is discoverable at all."""
+    from .steps import known_steps
+    names = known_steps()
+    print(f"{len(names)} transform steps available for a profile's "
+          f"`transform:` list:")
+    for name in names:
+        print(f"  {name}")
+    print("\nUse one as a bare name (`- base64_decode`) or with params "
+          "(`- aes_decrypt: { mode: gcm, key: \"${session_key}\" }`).")
     return 0
 
 
@@ -259,11 +303,14 @@ def cmd_bridge(args) -> int:
         svc.add_profile(Profile.load(path))
     print(f"profiles: {list(svc.profiles)}  default_vars: {list(default_vars)}"
           f"  auth: {'on' if token else 'off'}")
+    print("⚠ scope is enforced per request only for frontends that send a "
+          '"host"; a message without one is not scope-checked')
     capture_port = args.capture_port if args.capture else None
     serve_http(svc, host=args.host, port=args.port,
                capture_port=capture_port,
                capture_key_var=args.capture_var,
-               observe_path=args.observe_file)
+               observe_path=args.observe_file,
+               capture_token=args.capture_token)
     return 0
 
 
@@ -290,7 +337,8 @@ def cmd_capture(args) -> int:
     )
 
     cap = KeyCapture()
-    serve_capture(cap, host=args.host, port=args.port, block=False)
+    serve_capture(cap, host=args.host, port=args.port, block=False,
+                  token=args.token)
 
     print(f"[+] Tatar Relay capture server:  http://{args.host}:{args.port}/key")
     if os.path.isfile(hook_path):
@@ -337,7 +385,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     def common(sp):
         sp.add_argument("--channel", default="request", choices=["request", "response"])
-        sp.add_argument("--host", default="")
+        sp.add_argument("--host", default="",
+                        help="authorize against the profile's scope as this host "
+                             "(default: the profile's first scope host)")
+        sp.add_argument("--path", default="",
+                        help="also check the scope's paths: regexes against this "
+                             "path (default: host-only check)")
         sp.add_argument("--var", action="append", help="name=HEX (e.g. session_key=00112233…)")
 
     r = sub.add_parser("run", help="decrypt a captured wire body")
@@ -351,6 +404,9 @@ def build_parser() -> argparse.ArgumentParser:
     v = sub.add_parser("validate", help="validate a profile (+ optional round-trip)")
     v.add_argument("profile"); v.add_argument("--sample", help="plaintext JSON file for round-trip")
     common(v); v.set_defaults(func=cmd_validate)
+
+    st = sub.add_parser("steps", help="list the available transform step names")
+    st.set_defaults(func=cmd_steps)
 
     i = sub.add_parser("inspect", help="fingerprint a captured blob + draft a profile")
     i.add_argument("input")
@@ -386,6 +442,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="port for the capture sidecar (default: 9091)")
     b.add_argument("--capture-var", default="session_key", dest="capture_var",
                    help="var name to store the captured key into (default: session_key)")
+    b.add_argument("--capture-token", default=None, dest="capture_token",
+                   help="require this shared secret in the X-Relay-Token header "
+                        "on the sidecar's /reset and /schemes (default: no auth). "
+                        "/key and /observe stay open — the injected page hook "
+                        "would have to carry the secret to reach them.")
     b.add_argument("--observe-file", default="observations.jsonl", dest="observe_file",
                    help="JSONL file for crypto observations from the JS observer "
                         "(default: observations.jsonl)")
@@ -398,6 +459,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="capture server port (default: 9091)")
     cap.add_argument("--timeout", type=int, default=120,
                      help="seconds to wait for the key (default: 120)")
+    cap.add_argument("--token", default=None,
+                     help="require this shared secret in the X-Relay-Token "
+                          "header on /reset and /schemes (default: no auth)")
     cap.set_defaults(func=cmd_capture)
 
     return p
@@ -416,9 +480,22 @@ def main(argv: Optional[list] = None) -> int:
         return args.func(args)
     except DecryptError as e:
         print(f"✗ {e}", file=sys.stderr)
+        # DecryptError.__str__ omits detail, so the hook/step breadcrumbs the
+        # engine collected would otherwise be gathered and never shown.
+        for line in e.detail.get("logs") or []:
+            print(f"  · {line}", file=sys.stderr)
         return 2
     except RelayError as e:
         print(f"✗ {e}", file=sys.stderr)
+        return 2
+    # Backstops: anything the commands touch outside a Profile (an unreadable
+    # --input/--sample, a stray YAML) still exits with one line, not a traceback.
+    except yaml.YAMLError as e:
+        print(f"✗ invalid YAML: {e}", file=sys.stderr)
+        return 2
+    except OSError as e:
+        where = getattr(e, "filename", None)
+        print(f"✗ {where + ': ' if where else ''}{e.strerror or e}", file=sys.stderr)
         return 2
 
 

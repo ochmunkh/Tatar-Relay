@@ -19,13 +19,3 @@ class DataType(str, Enum):
     def accepts(self, other: "DataType") -> bool:
         """Can a value produced as ``other`` be fed into an input of ``self``?"""
         return self is DataType.ANY or other is DataType.ANY or self is other
-
-
-def runtime_type(value) -> DataType:
-    if isinstance(value, (bytes, bytearray)):
-        return DataType.BYTES
-    if isinstance(value, str):
-        return DataType.TEXT
-    if isinstance(value, (dict, list)):
-        return DataType.JSON
-    return DataType.ANY

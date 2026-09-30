@@ -10,7 +10,10 @@ from .errors import DecryptError, RelayError, ProfileError, ScopeViolation
 from .profile import Profile
 from .variables import VarStore
 
-__version__ = "0.1.0"
+# THE single source of truth for the version. pyproject.toml reads this
+# attribute (dynamic version) and cli.py's --version formats it, so a release
+# bumps exactly one literal. tests/test_version.py pins it to CHANGELOG.md.
+__version__ = "0.6.1"
 
 __all__ = [
     "Context", "HttpMessage", "Engine", "ChannelPipeline",

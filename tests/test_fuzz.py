@@ -40,33 +40,45 @@ HOSTILE = [
 ]
 
 
-def _must_not_crash(step, blob, ctx):
+def _must_not_crash(step, blob, ctx, allowed=None):
     """A hostile blob may decode or may raise DecryptError — but never any other
-    exception type."""
+    exception type.
+
+    ``allowed`` additionally pins the category. Without it these tests drive
+    exactly the paths whose category was re-classified from ``config_error`` to
+    ``decode_failed`` and assert nothing about it, so the whole set could flip
+    back unnoticed — a codec that cannot read *this message* is a data problem
+    the operator should retry elsewhere, not a profile they should go and edit.
+    """
     try:
         step.forward(blob, ctx)
-    except DecryptError:
-        pass
+    except DecryptError as e:
+        if allowed is not None:
+            assert e.category in allowed, f"{step.name}: {e.category} for {blob[:20]!r}"
 
 
 @pytest.mark.parametrize("blob", HOSTILE)
 def test_base64_decode_hostile(blob):
-    _must_not_crash(build_step({"base64_decode": {}}), blob, _ctx())
+    _must_not_crash(build_step({"base64_decode": {}}), blob, _ctx(),
+                    allowed={"decode_failed"})
 
 
 @pytest.mark.parametrize("blob", HOSTILE)
 def test_hex_decode_hostile(blob):
-    _must_not_crash(build_step({"hex_decode": {}}), blob, _ctx())
+    _must_not_crash(build_step({"hex_decode": {}}), blob, _ctx(),
+                    allowed={"decode_failed"})
 
 
 @pytest.mark.parametrize("blob", HOSTILE)
 def test_gunzip_hostile(blob):
-    _must_not_crash(build_step({"gunzip": {}}), blob, _ctx())
+    _must_not_crash(build_step({"gunzip": {}}), blob, _ctx(),
+                    allowed={"decode_failed"})
 
 
 @pytest.mark.parametrize("blob", HOSTILE)
 def test_nonce_body_hostile(blob):
-    _must_not_crash(build_step({"nonce_body": {"nonce_length": 12}}), blob, _ctx())
+    _must_not_crash(build_step({"nonce_body": {"nonce_length": 12}}), blob, _ctx(),
+                    allowed={"decode_failed"})
 
 
 @pytest.mark.parametrize("blob", HOSTILE)
@@ -80,16 +92,18 @@ def test_evp_aes_hostile(blob):
 def test_gunzip_truncated_stream_raises():
     good = gzip.compress(b"hello world " * 200)
     step = build_step({"gunzip": {}})
-    with pytest.raises(DecryptError):
+    with pytest.raises(DecryptError) as ei:
         step.forward(good[: len(good) // 2], _ctx())
+    assert ei.value.category == "decode_failed"
 
 
 def test_gunzip_decompression_bomb_capped():
     # ~4 MiB of zeros compresses to a few KB; a 1 MiB cap must reject it.
     bomb = gzip.compress(b"\x00" * (4 * 1024 * 1024))
     step = build_step({"gunzip": {"max_size": 1 << 20}})
-    with pytest.raises(DecryptError):
+    with pytest.raises(DecryptError) as ei:
         step.forward(bomb, _ctx())
+    assert ei.value.category == "decode_failed"
 
 
 def test_gunzip_within_cap_roundtrip():
@@ -101,8 +115,9 @@ def test_gunzip_within_cap_roundtrip():
 def test_base64_output_cap():
     blob = base64.b64encode(b"x" * 1000)
     step = build_step({"base64_decode": {"max_size": 16}})
-    with pytest.raises(DecryptError):
+    with pytest.raises(DecryptError) as ei:
         step.forward(blob, _ctx())
+    assert ei.value.category == "decode_failed"
 
 
 def test_evp_aes_malformed_fields_raise():

@@ -20,24 +20,12 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from ..context import Context
 from ..datatypes import DataType
 from ..errors import DecryptError
-from ..variables import Renderer
-from .base import Step, register
+from .base import Step, register, resolve_key
 
 
 def _resolve_key(params, ctx) -> bytes:
-    tmpl = params.get("key")
-    if tmpl is None:
-        raise DecryptError(category="config_error", message="chacha20: missing 'key'")
-    val = Renderer(ctx.vars).render(tmpl)
-    if isinstance(val, str):
-        val = val.encode("utf-8")
-    if not isinstance(val, (bytes, bytearray)):
-        raise DecryptError(category="config_error", message="chacha20: key did not resolve to bytes")
-    val = bytes(val)
-    if len(val) != 32:
-        raise DecryptError(category="wrong_key_size",
-                           message=f"chacha20-poly1305: key must be 32 bytes, got {len(val)}")
-    return val
+    return resolve_key(params, ctx, sizes=(32,), label="chacha20",
+                       size_label="chacha20-poly1305")
 
 
 @register("chacha20_decrypt")

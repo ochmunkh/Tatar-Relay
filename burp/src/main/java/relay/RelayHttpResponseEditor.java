@@ -59,7 +59,9 @@ public class RelayHttpResponseEditor implements ExtensionProvidedHttpResponseEdi
         String wireB64 = Base64.getEncoder()
                 .encodeToString(body.getBytes(StandardCharsets.UTF_8));
 
-        BridgeClient.DecryptResult r = bridge.decrypt(profile, "response", wireB64);
+        BridgeClient.DecryptResult r = bridge.decrypt(
+                profile, "response", wireB64,
+                hostOf(requestResponse), pathOf(requestResponse));
         if (r.error == null) {
             this.ctxToken = r.ctxToken;
             editor.setEditable(true);
@@ -108,4 +110,24 @@ public class RelayHttpResponseEditor implements ExtensionProvidedHttpResponseEdi
     public Selection selectedData() {
         return editor.selection().isPresent() ? editor.selection().get() : null;
     }
+
+    /** Host of the flow, or null when Burp has not attached a service to it.
+     *  Best effort on purpose: a null here means "no host supplied", which the
+     *  core treats as the previous, unchecked behaviour rather than a refusal. */
+    private static String hostOf(HttpRequestResponse rr) {
+        try {
+            return rr.request().httpService().host();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String pathOf(HttpRequestResponse rr) {
+        try {
+            return rr.request().path();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
 }

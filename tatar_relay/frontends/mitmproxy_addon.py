@@ -41,6 +41,8 @@ class TatarRelay:
         self._ctx = Context(request=HttpMessage(host=self.profile.scope.hosts[0]))
         self._vars = self.profile.new_varstore(self._ctx)
         self._ctx.vars = self._vars
+        # Last feed() warning text, so a repeat is not printed again (see response()).
+        self._last_feed_warning: str | None = None
 
     def _in_scope(self, flow: "http.HTTPFlow") -> bool:
         return self.profile.scope.matches(flow.request.host, flow.request.path)
@@ -83,8 +85,22 @@ class TatarRelay:
                           body=flow.response.raw_content)
         try:
             self.profile.feed(msg, "response", self._vars)
-        except RelayError:
-            pass
+        except RelayError as e:
+            # Do NOT swallow this. `feed()` raises extraction_failed when the
+            # handshake message arrived but no locate strategy matched; dropped
+            # here it resurfaces on the NEXT request as tag_mismatch/padding and
+            # points the operator at the cipher step instead of at the handshake.
+            # Same shape as the decrypt warning in request() above.
+            #
+            # Repeats are collapsed: an extraction var with no `match:` regex is
+            # re-checked on every in-scope response, and printing the identical
+            # line per response would bury the first one.
+            text = f"[tatar-relay] extraction: {e}"
+            if text != self._last_feed_warning:
+                self._last_feed_warning = text
+                mitm_ctx.log.warn(text)
+        else:
+            self._last_feed_warning = None
 
 
 addons = [TatarRelay()]

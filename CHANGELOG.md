@@ -6,12 +6,101 @@
 
 ---
 
+## [Unreleased]
+
+### Нэмэгдсэн зүйлс
+- **Scope-ын шалгалт bridge ба CLI дээр.** Contract #5-д `host` / `path` гэсэн
+  заавал биш талбар нэмэгдсэн. `host` ирвэл profile-ын fail-closed scope-ыг
+  request тус бүрт шалгана (`Profile.authorize`) — урьд нь bridge нь host-ыг
+  profile-ын өөрийн scope-оос бүрдүүлдэг тул шалгалт хэзээ ч онхгүй байсан.
+  `host` илгээхгүй frontend урьдын адил ажиллана (backward compatible), гэвч
+  `relay bridge` асахад товч сануулга хэвлэнэ. CLI-д `--path` flag нэмэгдсэн.
+- **`relay steps`** — боломжтой transform step-үүдийг хэвлэнэ (`known_steps()`-ийг
+  анх удаа хэрэглэж байна).
+- **`decode_failed`** алдааны категори (Contract #4-д additive). "Профайл буруу"
+  (`config_error`) болон "энэ нэг мессеж профайлын хүлээж байгаа хэлбэртэй биш"
+  хоёрыг ангилж байна — эсрэг зөв арга хэмжээ шаарддаг хоёр тохиолдол.
+- **`extraction_failed`** категори анх удаа бодитоор шидэгдэж байна: handshake
+  мессеж ирсэн боловч locate тохирсонгүй бол чимээгүй өнгөрөхөө өмнө
+  хувьсагчын нэрийг нэрлэж алдаа өгнө. mitmproxy addon-ы `response()` нь
+  `feed()`-ийн цорын нэг production дуудагч бөгөөд урьд нь `except RelayError:
+  pass` байсан — өөрөөр хэлбэл алдаа операторт хүрдэггүй байсан. Одоо
+  `ctx.log.warn` руу гарна (давхардсан мөрийг дарна);
+  `tests/test_mitmproxy_addon.py` үүнийг stub mitmproxy-ээр батална.
+- **`ctx.log()` харагдадаг болсон** (Contract #2). `relay preview` дээр step бүрийн
+  дараа хэвлэнэ, алдаа гарвал `DecryptError.detail["logs"]`-д дагалдана — урьд нь
+  hook-ын diagnostic нь хэн ч уншдаггүй list руу бичигддаг байсан. CLI-д ч
+  хэвлэгдэнэ: `DecryptError.__str__` нь `detail`-ыг хэвлэдэггүй тул `main` нь
+  цуглуулсан log-оо хаядаг байсан. `relay preview` нь Engine-ийн `_run`-ыг
+  тойрдог тул унасан step-ийн log-ыг өөрөө хавсаргана.
+- **Doc-drift тестүүд** (`tests/test_docs_consistency.py`, `tests/test_cli_docs.py`,
+  `tests/test_version.py`): тестийн тоо, README-ийн хоёр хэлнии бүлэгийн
+  тэнцүү, холбоосын зөв байдал, user-guide-ын CLI тушаалууд болон хувилбарын
+  нэг эх сурвалжийг шалгана. Нийт: **228 тест**.
+
+### Үөрчлөгдсөн / хатууруулсан
+- **Key capture sidecar-ын нээлттэй байдлыг багасгасан.** `/status` нь
+  session key-г буцаахаа больсон (`{"ok":true,"ready":…}` болсон) — sidecar нь
+  cross-origin зөвшөөрдөг тул тестерийн browser-т нээлттэй дурын хуудас
+  түлхүүрийг уншиж чаддаг байсан. CORS зөвхөн `/key`, `/observe` хоёрт
+  үлдсэн (hook энэ хоёрыг л дууддаг). `/reset`, `/schemes` нь шинэ
+  `--capture-token` / `relay capture --token`-ыг шаардана (анхдагчаар асаагүй).
+- **`${session_key}` бүх талдаа ижил байт болж уншигдах болсон.**
+  `variables.coerce_key()` нэг дүрэм болж гарсан; `hmac_verify` ба reseal `sign`
+  хоёр адилхан уншина. Урьд нь 64 hex тэмдэгттэй str түлхүүрийг `hmac_verify`
+  32 байт, `sign` 64 байт болгож авдаг байсан.
+  **Анзаарах:** `aes_decrypt` / `chacha20_decrypt`-д орох prefix-гүй 32/64 hex
+  тэмдэгттэй **string** түлхүүр одоо hex гэж тайлагдана (өмнө нь UTF-8).
+  Хуучин уншлагыг хүсвэл `str:` prefix тавь. `bytes` түлхүүр ба
+  `evp_aes_decrypt`-ын passphrase (текст байх үүргэтэй) өөрчлөгдөөгүй.
+  Энэ өөрчлөлтийг **зориудаар хадгалсан**: AES түлхүүрийг бичих хэвийн хэлбэр
+  бол 32/48/64 hex тэмдэгт бөгөөд гурвуулаа өмнө нь буруу уншигдаж байсан —
+  32 тэмдэгтийн хувьд **чимээгүй**, учир нь 32 UTF-8 байт нь өөрөө хүчинтэй
+  AES-256 урт тул size шалгалтыг давж, буруу түлхүүрээр тайлдаг байсан. Зөвхөн
+  hex цифрээс тогтсон, тэгш урттай **текст** түлхүүр хоёр дахин багасах нь
+  зардал боловч cipher бүр үүнийг `padding` / `tag_mismatch` /
+  `wrong_key_size`-аар хатуу татгалзана — гаднаас зөв харагдах plaintext
+  хэзээ ч буцахгүй. Сонгосон уншлагыг `ctx.log()` болон `wrong_key_size`-ын
+  мессеж нэрлэж хэлнэ, `tests/test_key_semantics.py` хоёр талыг хоёуланг
+  бэхэлнэ.
+- **codecs-ын runtime алдаанууд** (base64 / hex / gunzip / `nonce_body` /
+  `strip_prefix`) `config_error` биш `decode_failed` болсон. `configure()` доторх
+  тохиргооны шалгалтууд `config_error` хэвээр.
+- **`ScopeViolation`, `ProfileError`** нь `category` атрибут авсан (`scope_violation`,
+  `profile_invalid`), bridge тэднийг `internal` болгож дардаггүй болсон.
+
+### Засварласан
+- **`relay --version`** хуучин тоо хэвлэхээ больсон. `pyproject.toml` ба
+  `tatar_relay/__init__.py` хоёр тусдаа `0.1.0` гэж бичигдсэн байсан;
+  одоо `__version__` нэг л удаа бичигдэж, pyproject түүнийг уншдаг болсон.
+- **Profile бичих үед гардаг дөрөв төрлийн алдаа** traceback биш, нэг мөр
+  алдаа болсон: step-ийн нэрийн алдаа (`difflib`-ээр санал болгоно),
+  байхгүй profile, эвдэрсэн YAML (мөрийн дугаартай), ба hex биш `--var`.
+  `relay preview --channel response` нь pipeline байхгүй бол санаашрахаа больсон.
+- **Hook-ийн signature-ын баримтжуулга.** `docs/how-to-add-algorithm.md` ба
+  `docs/algorithms.md` дээр 5 жороос `params: dict` гедэг гуравдах аргумент
+  арилсан — `steps/pyhook.py` нь `fn(data, ctx)` гэж л дууддаг тул repo-гийн
+  цорын ганц RSA-hybrid hook жишээ ажиллахгүй байсан.
+- **`docs/user-guide.md` §8 (CLI).** Байхгүй `tatar-relay` бинар, байхгүй
+  flag-ууд (`run --port`, `inspect --profile/--request`) ба байхгүй proxy режимийг
+  зассан; 9 тушаал бүгд бичигдсэн, `relay preview`-г тергүүнд тавьсан.
+- **README** — тестийн тоо зассан; монгол хэсэгт дутаж байсан
+  `### Хөгжүүлэлт`, `### Замын зураг` бүлэг ба `CONTRACTS.md` холбоос нэмэгдсэн.
+
+### Хассан
+- `datatypes.runtime_type()` — repo-д хэзээ ч дуудагдаагүй.
+- `steps/crypto.py` ба `steps/chacha.py`-ын хуулбар `_resolve_key` — нэг болгож
+  `steps/base.py::resolve_key`-д нэгтгэсэн. cli/bridge-ийн var coercion мөн адил.
+- 9 ашиглагдаагүй import.
+
+---
+
 ## [0.6.1] — Hardening: input caps, typed HMAC keys, fuzz tests
 
 ### Нэмэгдсэн зүйлс
 - **Fuzz / hostile-input тестүүд** (`tests/test_fuzz.py`): truncated blob,
   буруу UTF-8, non-hex/non-base64 junk, decompression bomb бүгд categorized
-  `DecryptError` шиднэ, uncaught exception гардаггүй. Нийт: **125 тест**.
+  `DecryptError` шиднэ, uncaught exception гардаггүй. Нийт: **124 тест**.
 
 ### Өөрчлөгдсөн / хатууруулсан
 - **`gunzip`** — streaming decompression + гаралтын хэмжээний хязгаар

@@ -11,11 +11,10 @@ import base64
 import hashlib
 import hmac
 import json
-from typing import Any
 
 from .context import Context
 from .errors import DecryptError
-from .variables import Renderer
+from .variables import Renderer, coerce_key
 
 _SERIALIZE_MODES = ("preserve", "canonical", "compact")
 
@@ -28,6 +27,12 @@ _SIGN_ALGOS = {
 
 
 def _to_bytes(v) -> bytes:
+    """Stringify any reseal value for the ``${payload}`` extras.
+
+    This is NOT the key rule — a key goes through ``coerce_key`` (see _sign), so
+    a hex-string ``session_key`` signs with the same bytes ``hmac_verify``
+    checked with.
+    """
     if isinstance(v, (bytes, bytearray)):
         return bytes(v)
     return str(v).encode("utf-8")
@@ -78,7 +83,7 @@ class Reseal:
                 category="config_error",
                 message=f"unsupported sign algo: {algo} "
                         f"(supported: {', '.join(_SIGN_ALGOS)})")
-        key = _to_bytes(rnd.render(params["key"]))
+        key = coerce_key(rnd.render(params["key"]), "sign")
         msg = rnd.render_bytes(params["input"])
         mac = hmac.new(key, msg, hashfn).digest()
         enc = params.get("encoding", "hex")
