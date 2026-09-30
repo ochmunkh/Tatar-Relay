@@ -154,7 +154,7 @@ loader refuses hooks unless `security.allow_python_hooks: true`). Scope is
 
 ```bash
 pip install -e .[dev]
-pytest            # 228 tests: unit + round-trip + golden + fuzz/hostile-input
+pytest            # 232 tests: unit + round-trip + golden + fuzz/hostile-input
 ```
 
 ### Roadmap
@@ -290,7 +290,7 @@ Python код агуулагдаж болох тул дурын код ажил�
 
 ```bash
 pip install -e .[dev]
-pytest            # 228 тест: unit + round-trip + golden + fuzz/дайсагч оролт
+pytest            # 232 тест: unit + round-trip + golden + fuzz/дайсагч оролт
 ```
 
 ### Замын зураг

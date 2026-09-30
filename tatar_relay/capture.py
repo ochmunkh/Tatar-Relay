@@ -28,7 +28,14 @@ from __future__ import annotations
 import hmac
 import json
 import threading
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # serve_capture imports http.server lazily — the sidecar is optional and
+    # importing a server module at package import time is not free. The name
+    # still has to be visible here or its "HTTPServer" return annotation is a
+    # dangling forward reference (get_type_hints and linters both flag it).
+    from http.server import HTTPServer
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 3.13 is what the suite is developed and verified against. pyproject
+      # declares requires-python >=3.9; a 3.9 job belongs here too, but it has
+      # not been run yet, and a matrix entry nobody has proved green is worse
+      # than no matrix entry.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # Only the rules that flag real errors: syntax (E9), undefined names
+      # (F82), broken asserts and comparisons (F63, F7). Style is deliberately
+      # not enforced — the full default rule set has ~148 hits on this codebase
+      # and reformatting it is a separate decision. Pinned so a new ruff release
+      # cannot turn a green workflow red on its own.
+      - name: Lint
+        run: |
+          pip install ruff==0.16.9
+          ruff check --select E9,F63,F7,F82 tatar_relay tests tools
+
+      # The README is bilingual by product decision; this fails when the two
+      # halves drift structurally. See CONTRIBUTING.md.
+      - name: README bilingual parity
+        run: python tools/readme_parity.py
+
+      - name: Tests
+        run: pytest -q

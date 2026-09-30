@@ -36,7 +36,31 @@
 - **Doc-drift тестүүд** (`tests/test_docs_consistency.py`, `tests/test_cli_docs.py`,
   `tests/test_version.py`): тестийн тоо, README-ийн хоёр хэлнии бүлэгийн
   тэнцүү, холбоосын зөв байдал, user-guide-ын CLI тушаалууд болон хувилбарын
-  нэг эх сурвалжийг шалгана. Нийт: **228 тест**.
+  нэг эх сурвалжийг шалгана. Нийт: **232 тест**.
+
+<!-- TODO(mn): the four bullets below are English placeholders written by a
+     non-Mongolian speaker. They need an idiomatic Mongolian translation before
+     release — do not machine-translate them. -->
+- **CI** — `.github/workflows/ci.yml`, the repo's first workflow. On push and
+  pull request: install with the `dev` extra, a scoped `ruff` pass (only the
+  rules that flag real errors), the README parity check, then `pytest -q`.
+- **`CONTRIBUTING.md`** — the repo had none. It states that
+  `tatar_relay/__init__.py` is the version's single source of truth, how each
+  other place derives from or is checked against it, and the release steps.
+  `tests/test_version.py` now fails if that file stops saying so, asserts on
+  what `--version` actually prints, and compares the installed distribution
+  metadata with `__version__` when the package is installed.
+- **`tools/readme_parity.py`** — compares the bilingual README's two halves
+  structurally (heading count, fenced code-block count, table row count) and
+  names the exact mismatch. CI runs it as its own step and
+  `tests/test_docs_consistency.py` runs the same comparison, which now covers
+  code blocks and tables as well as headings.
+- **`burp/BUILD.md`** — the Burp extension had never been compiled, because the
+  Montoya API jar was absent. It now builds: `javac --release 17` against
+  `montoya-api 2023.12.1` and `gson 2.10.1` fetched from Maven Central, with no
+  errors and no warnings under `-Xlint:all`. BUILD.md gives the Gradle route,
+  the plain-`javac` route, how to load the jar in Burp and how to verify it
+  loaded, and marks which steps are verified and which are not.
 
 ### Үөрчлөгдсөн / хатууруулсан
 - **Key capture sidecar-ын нээлттэй байдлыг багасгасан.** `/status` нь
@@ -70,6 +94,12 @@
   `profile_invalid`), bridge тэднийг `internal` болгож дардаггүй болсон.
 
 ### Засварласан
+<!-- TODO(mn): English placeholder — needs an idiomatic Mongolian translation. -->
+- **`serve_capture`'s `"HTTPServer"` return annotation** was a dangling forward
+  reference: `http.server` is imported inside the function body, so the name was
+  never visible at module level and `typing.get_type_hints` (and the new CI
+  linter) rejected it. Declared under `TYPE_CHECKING`; the lazy runtime import
+  is unchanged.
 - **`relay --version`** хуучин тоо хэвлэхээ больсон. `pyproject.toml` ба
   `tatar_relay/__init__.py` хоёр тусдаа `0.1.0` гэж бичигдсэн байсан;
   одоо `__version__` нэг л удаа бичигдэж, pyproject түүнийг уншдаг болсон.

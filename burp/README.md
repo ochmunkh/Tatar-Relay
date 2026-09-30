@@ -28,7 +28,10 @@ one is loaded it is used automatically.
 
 ## 2. Build the extension jar
 
-Requires a JDK 17+ (`javac` + `jar`). Two ways:
+Requires a JDK 17+ (`javac` + `jar`). Two ways below; [`BUILD.md`](BUILD.md) has
+the full, copy-pasteable version — including the plain-`javac` route for
+Linux/macOS, where `build.ps1` does not work, and how to verify the extension
+loaded.
 
 **No Gradle needed (recommended on Windows):**
 

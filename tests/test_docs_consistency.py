@@ -5,17 +5,20 @@ Three cheap, offline checks:
   1. Every "NNN tests" / "NNN тест" claim matches what pytest actually collects.
      Both halves of the README and the newest changelog entry claimed 125
      against 124 collected.
-  2. The bilingual README's two halves carry the same set of `###` sections.
-     The Mongolian half was missing `### Development` and `### Roadmap`, so a
-     Mongolian-speaking contributor reading their half never learned
-     `pip install -e .[dev]` or `pytest`. The bilingual README is a deliberate
-     product decision, so the guard keeps the halves level — it never argues for
-     dropping one.
+  2. The bilingual README's two halves stay structurally level — same number
+     of `###` sections, fenced code blocks and table rows. The Mongolian half
+     was missing `### Development` and `### Roadmap`, so a Mongolian-speaking
+     contributor reading their half never learned `pip install -e .[dev]` or
+     `pytest`. The bilingual README is a deliberate product decision, so the
+     guard keeps the halves level — it never argues for dropping one. The
+     comparison itself lives in `tools/readme_parity.py` so CI can run it on
+     its own; this only asserts that it finds nothing.
   3. Every ``[`file`](path)`` link in the docs points at something on disk.
 
 The collected count comes from conftest.py's `full_suite_test_count` fixture,
 which skips rather than lies when only part of the suite was run.
 """
+import importlib.util
 import re
 from pathlib import Path
 
@@ -27,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 COUNT_SOURCES = ("README.md",)
 
 # Markdown files whose links must resolve.
-LINK_SOURCES = ["README.md", "CONTRACTS.md", "CHANGELOG.md"] + [
+LINK_SOURCES = ["README.md", "CONTRACTS.md", "CHANGELOG.md", "CONTRIBUTING.md"] + [
     f"docs/{p.name}" for p in sorted((ROOT / "docs").glob("*.md"))
 ]
 
@@ -62,28 +65,35 @@ def test_test_count_claims_match_what_pytest_collects(full_suite_test_count):
 
 # ---- 2. the bilingual README's halves stay level -------------------------
 
+def _readme_parity():
+    """Load tools/readme_parity.py, the script CI runs, without installing it."""
+    path = ROOT / "tools" / "readme_parity.py"
+    assert path.exists(), f"{path} is missing; CI runs it as its own step"
+    spec = importlib.util.spec_from_file_location("readme_parity", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _readme_halves():
-    lines = (ROOT / "README.md").read_text(encoding="utf-8").split("\n")
-    en = lines.index("## English")
-    mn = lines.index("## Монгол")
-    heads = lambda a, b: [l[4:].strip() for l in lines[a:b] if l.startswith("### ")]
-    return heads(en, mn), heads(mn, len(lines))
+    parity = _readme_parity()
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    return parity.analyse(text)
 
 
-def test_both_readme_halves_carry_the_same_sections():
-    english, mongolian = _readme_halves()
-    assert len(english) == len(mongolian), (
-        "the README halves have drifted apart:\n"
-        f"  English   ({len(english)}): {english}\n"
-        f"  Монгол    ({len(mongolian)}): {mongolian}\n"
-        "Both halves are a product decision — add the missing section to the "
-        "shorter half, never remove one from the longer."
+def test_the_readme_halves_match_structurally():
+    parity = _readme_parity()
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    problems = parity.compare(text)
+    assert not problems, (
+        "the README halves have drifted apart:\n  "
+        + "\n  ".join(problems)
     )
 
 
 def test_neither_readme_half_is_empty():
     english, mongolian = _readme_halves()
-    assert english and mongolian
+    assert english["headings"] and mongolian["headings"]
 
 
 # ---- 3. links resolve ----------------------------------------------------
