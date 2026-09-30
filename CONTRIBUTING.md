@@ -104,9 +104,13 @@ CI matrix together.
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
-pull request: install with the `dev` extra, a scoped `ruff` pass (only the
-rules that flag real errors — syntax, undefined names, broken asserts), the
-README parity check, then `pytest -q`. It does not build the Burp extension.
+pull request, in three jobs:
+
+| Job | What it does |
+|---|---|
+| `lint` | a scoped `ruff` pass (only the rules that flag real errors — syntax, undefined names, broken asserts) at `--target-version py39`, then the README parity check. Neither varies by interpreter, so both run once. |
+| `test` | a 3.9 + 3.13 matrix: install with the `dev` extra, then `pytest -q`. `fail-fast` is off so one interpreter breaking does not hide the other. |
+| `build-jar` | compiles the Burp extension with `.github/build-jar.sh` (JDK 17, no Gradle). [`release.yml`](.github/workflows/release.yml) runs the same script on a `v*` tag, so this is what keeps releases buildable. |
 
 ## Scope of a change
 
