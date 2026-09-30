@@ -84,3 +84,10 @@ jobs:
           java-version: "17"
       - name: Compile jar
         run: bash .github/build-jar.sh
+
+      # Burp Community is GUI-only, so CI cannot load the jar into Burp. This
+      # checks the part that does not need Burp: initialize() runs against a
+      # mock MontoyaApi and registers the name, both editor tabs and its log
+      # line. See burp/BUILD.md for what it does and does not prove.
+      - name: Extension loads (mock MontoyaApi)
+        run: bash .github/test-extension.sh

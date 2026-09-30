@@ -148,10 +148,52 @@ design, not by defect. The script hard-codes the Windows classpath separator
 nonexistent path, so every `com.google.gson` / `burp.api.montoya` import fails
 to resolve. **`build.ps1` is Windows-only; on Linux/macOS use route A.**
 
-## 4. Load it into Burp — *unverified*
+## 4. Does it load?
 
-Burp is not available in this environment, so everything in this section is
-from the Montoya API contract and has **not** been run.
+Two different questions, with two different answers.
+
+### What CI checks, automatically
+
+`.github/test-extension.sh` (run by the `build-jar` job on every push) compiles
+the extension together with `burp/src/test/java/relay/ExtensionLoadTest.java`
+and runs it. That test calls the real entry point —
+`TatarRelayExtension.initialize(MontoyaApi)` — against a **mock** `MontoyaApi`
+and asserts that it:
+
+- completes without throwing;
+- names itself `Tatar Relay`;
+- registers **both** the request and the response editor provider;
+- logs the bridge URL and profile it will use;
+- defaults to `http://127.0.0.1:8799` when neither property nor environment
+  variable is set.
+
+```bash
+bash .github/build-jar.sh        # produces burp/build/libs/tatar-relay-burp.jar
+bash .github/test-extension.sh   # -> RESULT  extension loads and registers correctly
+```
+
+The mock is a `java.lang.reflect.Proxy` that records every call and returns a
+recording proxy for any interface-typed result, so the test needs no Mockito
+and no JUnit, and does not have to be rewritten when PortSwigger widens
+`MontoyaApi`. The test classes compile to `burp/test-out/`, never to the jar —
+verified: `unzip -l` on the shipped jar lists only the seven `relay/*.class`
+production entries.
+
+Note this is the **Montoya** entry point. `registerExtenderCallbacks` belongs to
+the legacy Extender API; this extension implements `BurpExtension`, so
+`initialize(MontoyaApi)` is what Burp calls.
+
+### What is still unverified
+
+**The jar has never been loaded into Burp.** Burp Community is GUI-only —
+loading an extension and reading back that it registered is a
+Professional/Enterprise capability, and there is no supported headless path, so
+no CI job can do it. The mock test proves the extension's own logic runs and
+registers; it does **not** prove that Burp accepts the jar, that the editor tabs
+render, or that the bridge round-trips.
+
+Everything in the rest of this section therefore comes from the Montoya API
+contract and has **not** been run.
 
 1. Start the Python bridge first (the extension is a thin JSON-RPC client and
    shows an error in its tab if the bridge is down):
