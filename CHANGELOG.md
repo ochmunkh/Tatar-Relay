@@ -36,7 +36,7 @@
 - **Doc-drift тестүүд** (`tests/test_docs_consistency.py`, `tests/test_cli_docs.py`,
   `tests/test_version.py`): тестийн тоо, README-ийн хоёр хэлнии бүлэгийн
   тэнцүү, холбоосын зөв байдал, user-guide-ын CLI тушаалууд болон хувилбарын
-  нэг эх сурвалжийг шалгана. Нийт: **232 тест**.
+  нэг эх сурвалжийг шалгана. Нийт: **233 тест**.
 
 <!-- TODO(mn): the four bullets below are English placeholders written by a
      non-Mongolian speaker. They need an idiomatic Mongolian translation before
