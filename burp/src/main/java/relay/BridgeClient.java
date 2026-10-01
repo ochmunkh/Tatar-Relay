@@ -56,6 +56,15 @@ public class BridgeClient {
     }
 
     public DecryptResult decrypt(String profile, String channel, String wireBase64) {
+        return decrypt(profile, channel, wireBase64, null, null);
+    }
+
+    /** As above, but also tells the core WHERE the flow is going so the profile's
+     *  fail-closed scope can be enforced per request (Contract #5, additive).
+     *  host/path are optional: null or empty are simply omitted, and the core
+     *  then behaves exactly as before rather than refusing the flow. */
+    public DecryptResult decrypt(String profile, String channel, String wireBase64,
+                                 String host, String path) {
         DecryptResult dr = new DecryptResult();
         try {
             JsonObject req = new JsonObject();
@@ -63,6 +72,8 @@ public class BridgeClient {
             if (profile != null && !profile.isEmpty()) req.addProperty("profile", profile);
             req.addProperty("channel", channel);
             req.addProperty("wire", wireBase64);
+            if (host != null && !host.isEmpty()) req.addProperty("host", host);
+            if (path != null && !path.isEmpty()) req.addProperty("path", path);
             req.addProperty("flow_id", Long.toHexString(System.nanoTime()));
             JsonObject out = post(req);
             if (out.has("ok") && out.get("ok").getAsBoolean()) {

@@ -9,7 +9,7 @@ they were plain HTTP, right inside Burp.
 
 <p align="center">
   <a href="https://github.com/ochmunkh/Tatar-Relay/actions/workflows/ci.yml"><img src="https://github.com/ochmunkh/Tatar-Relay/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-125-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-233-brightgreen" alt="tests">
   <a href="https://github.com/ochmunkh/Tatar-Relay/releases"><img src="https://img.shields.io/github/v/release/ochmunkh/Tatar-Relay" alt="release"></a>
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
 </p>
@@ -81,7 +81,11 @@ relay bridge examples/acme-bank-mobile.yaml --capture
 #    "Tatar Relay 🔓" tab on request AND response in Repeater.
 ```
 
-Full step-by-step (with troubleshooting): [`docs/QUICKSTART-MN.md`](docs/QUICKSTART-MN.md).
+On Windows you can double-click `start-bridge.bat` instead of step 1; on
+Linux/macOS run the command above from the repo root.
+
+Full step-by-step, with troubleshooting — in Mongolian:
+[`docs/QUICKSTART-MN.md`](docs/QUICKSTART-MN.md).
 
 ### Detect the cipher — "what encryption is this?"
 
@@ -157,7 +161,7 @@ loader refuses hooks unless `security.allow_python_hooks: true`). Scope is
 
 ```bash
 pip install -e .[dev]
-pytest            # 125 tests: unit + round-trip + golden + fuzz/hostile-input
+pytest            # 233 tests: unit + round-trip + golden + fuzz/hostile-input
 ```
 
 ### Roadmap
@@ -226,6 +230,9 @@ relay bridge examples/acme-bank-mobile.yaml --capture
 #    Repeater дээр request БА response-ийн "Tatar Relay 🔓" tab-ыг ашигла.
 ```
 
+Windows дээр 1-р алхамын оронд `start-bridge.bat`-ыг дабл дарж болно;
+Linux/macOS дээр дээрх тушаалыг repo-гийн хавтаснаас шууд асаана.
+
 Алхам алхмаар (troubleshooting-той): [`docs/QUICKSTART-MN.md`](docs/QUICKSTART-MN.md).
 
 ### Шифрийг таних — "энэ ямар шифрлэлт вэ?"
@@ -275,6 +282,9 @@ Transform алхмууд нь **reversible** (`decrypt(encrypt(x)) == x`). Resea
 - **Зорилтот ангилал:** [`docs/target-classes.md`](docs/target-classes.md) — field-wise AEAD,
   passphrase/KDF, бүрэн симметрик envelope (body + encrypted headers) бүгд хамрагдсан.
 
+Таван хөлдөөсөн гэрээ (frozen contracts) — [`CONTRACTS.md`](CONTRACTS.md), бүрэн
+зааварууд — [`docs/`](docs/).
+
 ### Аюулгүй байдал
 
 Declarative YAML хүрэлцэхгүй үед Python hook руу шилжинэ. Гэвч community profile-д
@@ -282,6 +292,24 @@ Python код агуулагдаж болох тул дурын код ажил�
 итгэмжлэгдээгүй profile нь заавал **declarative-only** байна
 (`allow_python_hooks: false` нь анхдагч тохиргоо). Scope нь **fail-closed** —
 зөвшөөрөгдсөн host байхгүй профайл ачаалахгүй.
+
+### Хөгжүүлэлт
+
+```bash
+pip install -e .[dev]
+pytest            # 233 тест: unit + round-trip + golden + fuzz/дайсагч оролт
+```
+
+### Замын зураг
+
+- **v0.2** — Burp extension, request + response editor tab, JS key capture.
+- **v0.3** — native ChaCha20-Poly1305, `nonce_body` талбарын codec.
+- **v0.4** — crypto observer + ухаалаг `inspect` (draft profile).
+- **v0.5** — бүрэн симметрик envelope: шифрлэгдсэн header-ийн дэд-pipeline,
+  header-ийг буцааж шифрлэж бичэх, `strip_prefix` codec.
+- **v0.6** — native `evp_aes_decrypt` (EVP_BytesToKey/MD5 passphrase-mode); bridge-ийн
+  typed var coercion (`str:` / `b64:` / `hex:`); Windows console Unicode засвар.
+- **дараагийн** — hook sandbox (итгэмжлэгдээгүй profile-ын Python hook-ыг тусгаарлах), дараа нь RSA/ECDH native derive, Intruder payload, WebSocket.
 
 ### Лиценз
 

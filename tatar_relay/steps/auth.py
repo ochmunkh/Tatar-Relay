@@ -40,7 +40,7 @@ from typing import Any
 from ..context import Context
 from ..datatypes import DataType
 from ..errors import DecryptError
-from ..variables import Renderer
+from ..variables import Renderer, coerce_key
 from .base import Step, register
 
 _ALGOS = {
@@ -51,43 +51,13 @@ _ALGOS = {
 
 
 def _to_bytes(v: Any) -> bytes:
-    """Coerce a key var to bytes.
+    """Coerce this step's key var to bytes.
 
-    Explicit prefixes remove the auto-hex ambiguity (mirroring the bridge's
-    --var coercion), so a raw UTF-8 key that happens to look like hex is not
-    silently halved:
-
-        str:<text>   -> UTF-8 bytes
-        hex:<hex>    -> hex-decoded
-        b64:<base64> -> base64-decoded
-
-    A bare value stays backward compatible: hex if it parses cleanly, else UTF-8.
+    The rule itself lives in ``variables.coerce_key`` so that reseal ``sign`` —
+    the other end of the same round-trip — reads an identical var identically.
+    See that docstring for the prefixes and the bare-value fallback.
     """
-    if isinstance(v, (bytes, bytearray)):
-        return bytes(v)
-    if isinstance(v, str):
-        if v.startswith("str:"):
-            return v[4:].encode("utf-8")
-        if v.startswith("hex:"):
-            try:
-                return bytes.fromhex(v[4:])
-            except ValueError as e:
-                raise DecryptError(category="config_error",
-                                   message=f"hmac_verify: bad hex key: {e}")
-        if v.startswith("b64:"):
-            try:
-                pad = (4 - len(v[4:]) % 4) % 4
-                return base64.b64decode(v[4:] + "=" * pad)
-            except Exception as e:
-                raise DecryptError(category="config_error",
-                                   message=f"hmac_verify: bad base64 key: {e}")
-        # Bare value: hex if it parses cleanly, else UTF-8 (backward compat).
-        try:
-            return bytes.fromhex(v)
-        except ValueError:
-            return v.encode("utf-8")
-    raise DecryptError(category="config_error",
-                       message=f"hmac_verify: cannot convert {type(v).__name__} to bytes")
+    return coerce_key(v, "hmac_verify")
 
 
 def _decode_mac(value: str, encoding: str) -> bytes:

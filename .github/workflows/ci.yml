@@ -1,22 +1,76 @@
-name: ci
+name: CI
 
+# Both sides of the 2026-09-30 merge added a CI workflow independently, and they
+# covered different things, so this is the union rather than a choice:
+#   from origin/main — the build-jar job, which compiles the Burp extension on
+#                      every push. Nothing else here would have caught the jar
+#                      breaking, and release.yml depends on the same script.
+#   from this branch — least-privilege permissions, the pinned error-only lint,
+#                      the bilingual README parity gate, the [dev] extra, and
+#                      triggering on every branch rather than only main.
 on:
   push:
-    branches: [ main ]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
-    name: Python tests
+  # Version-independent checks: running these once per interpreter would just
+  # duplicate the same failure twice.
+  lint:
+    name: Lint and docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
+
+      # Only the rules that flag real errors: syntax (E9), undefined names
+      # (F82), broken asserts and comparisons (F63, F7). Style is deliberately
+      # not enforced — the full default rule set has ~148 hits on this codebase
+      # and reformatting it is a separate decision. Pinned so a new ruff release
+      # cannot turn a green workflow red on its own.
+      #
+      # --target-version py39 matches requires-python, so syntax newer than the
+      # declared floor is a lint error here as well as a failure in the 3.9 job.
+      - name: Lint
+        run: |
+          pip install ruff==0.16.9
+          ruff check --target-version py39 --select E9,F63,F7,F82 tatar_relay tests tools
+
+      # The README is bilingual by product decision; this fails when the two
+      # halves drift structurally. See CONTRIBUTING.md.
+      - name: README bilingual parity
+        run: python tools/readme_parity.py
+
+  test:
+    name: Tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the floor declared by pyproject's requires-python; 3.13 is what
+        # the suite is developed against. Testing only the newest let the floor
+        # rot unchecked — it was verified for the first time on 2026-09-30
+        # (232 passed under CPython 3.9.25), and this job keeps it honest.
+        python-version: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Installing the package (not just its dependencies) is what lets
+      # tests/test_version.py check the INSTALLED distribution metadata against
+      # __version__; without it that test skips itself.
       - name: Install
-        run: pip install -e . pytest
-      - name: Run tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Tests
         run: pytest -q
 
   build-jar:
@@ -30,3 +84,10 @@ jobs:
           java-version: "17"
       - name: Compile jar
         run: bash .github/build-jar.sh
+
+      # Burp Community is GUI-only, so CI cannot load the jar into Burp. This
+      # checks the part that does not need Burp: initialize() runs against a
+      # mock MontoyaApi and registers the name, both editor tabs and its log
+      # line. See burp/BUILD.md for what it does and does not prove.
+      - name: Extension loads (mock MontoyaApi)
+        run: bash .github/test-extension.sh

@@ -17,7 +17,9 @@ pipelines, each `{ envelope, transform, reseal }`. `envelope` may also carry
 `direction`, `channel`, `request`, `response`, `matched`, `vars`, `session`,
 `log()`, `fail()`. `HttpMessage` exposes `header()` and, additively since v0.5,
 `set_header()`. Per-flow state lives in `session`; module globals must not be
-used for state.
+used for state. `log()` output is readable, not write-only: `relay preview`
+prints it after each step, and a failing pipeline carries it in
+`DecryptError.detail["logs"]` so a frontend can show it too.
 
 ## #3 — Step interface
 `tatar_relay/steps/base.py`. `forward(data, ctx)` (decrypt) and
@@ -28,17 +30,23 @@ load-time type checking. Register with `@register("name")`.
 `tatar_relay/errors.py`. `DecryptError(category, message, step, direction,
 channel, detail)`. Categories are a closed vocabulary (`padding`,
 `tag_mismatch`, `wrong_key_size`, `signature_invalid`, `type_mismatch`,
-`locate_failed`, `extraction_failed`, `scope_violation`, `profile_invalid`,
-`hook_error`, `config_error`, `internal`). Frontends catch these; the proxy
+`locate_failed`, `decode_failed`, `extraction_failed`, `scope_violation`,
+`profile_invalid`, `hook_error`, `config_error`, `internal`). `decode_failed`
+is additive and separates "this one message is not shaped the way the
+profile expects" (ignore the flow) from `config_error`, "your profile is wrong"
+(fix the YAML). `ScopeViolation` and `ProfileError` carry the matching category
+too, so a frontend triages them the same way. Frontends catch these; the proxy
 never crashes.
 
 ## #5 — Bridge (JSON-RPC)
 `tatar_relay/bridge.py`. How non-Python frontends (Burp/Java) reach the core.
 
 ```jsonc
-// Burp → Core
+// Burp → Core  ("host"/"path" optional and additive: when "host" is
+//                present the profile's fail-closed scope is checked per request)
 {"method":"decrypt","channel":"request","profile":"acme","wire":"<base64>",
- "flow_id":"a1","vars":{"session_key":"<hex>"}}
+ "flow_id":"a1","vars":{"session_key":"<hex>"},
+ "host":"api.example.com","path":"/v2/pay"}
 // Core → Burp
 {"ok":true,"plaintext":<json>,"ctx_token":"t-9f"}
 // Burp → Core
