@@ -12,25 +12,13 @@ from ..context import Context
 from ..datatypes import DataType
 from ..errors import DecryptError
 from ..variables import Renderer
-from .base import Step, register
+from .base import Step, register, resolve_key
 
 _VALID_KEY_SIZES = (16, 24, 32)
 
 
 def _resolve_key(params, ctx) -> bytes:
-    tmpl = params.get("key")
-    if tmpl is None:
-        raise DecryptError(category="config_error", message="aes: missing 'key'")
-    val = Renderer(ctx.vars).render(tmpl)
-    if isinstance(val, str):
-        val = val.encode("utf-8")
-    if not isinstance(val, (bytes, bytearray)):
-        raise DecryptError(category="config_error", message="aes: key did not resolve to bytes")
-    val = bytes(val)
-    if len(val) not in _VALID_KEY_SIZES:
-        raise DecryptError(category="wrong_key_size",
-                           message=f"aes: key must be 16/24/32 bytes, got {len(val)}")
-    return val
+    return resolve_key(params, ctx, sizes=_VALID_KEY_SIZES, label="aes")
 
 
 @register("aes_decrypt")

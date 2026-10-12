@@ -14,7 +14,6 @@ import json
 from typing import List, Tuple
 
 from .context import Context
-from .datatypes import DataType
 from .envelope import Envelope
 from .errors import DecryptError, ProfileError
 from .reseal import Reseal
@@ -108,6 +107,23 @@ class ChannelPipeline:
             msg.set_header(name, _stringify(value))
 
 
+def _attach_logs(err: DecryptError, ctx: Context, since: int = 0) -> None:
+    """Surface ``ctx.log()`` output (Contract #2) on the error a frontend sees.
+
+    A hook's log() is its only diagnostic channel; it used to write into a list
+    nothing ever read, so a hook author's breadcrumbs vanished exactly when they
+    were needed. ``relay preview`` prints them per step; here they ride along on
+    the failure so the bridge returns them too.
+
+    ``since`` skips the leading entries a caller has already displayed, so
+    ``relay preview`` — which prints logs as each step succeeds — attaches only
+    the ones the failing step added, instead of repeating the whole run.
+    """
+    logs = ctx.logs[since:]
+    if logs and "logs" not in err.detail:
+        err.detail["logs"] = [f"{level}: {msg}" for level, msg in logs]
+
+
 def _run(fn, data, ctx, step_name, direction):
     """Fail-safe wrapper: structured errors, never a bare crash."""
     try:
@@ -116,10 +132,13 @@ def _run(fn, data, ctx, step_name, direction):
         e.step = e.step or step_name
         e.direction = e.direction or direction
         e.channel = e.channel or ctx.channel
+        _attach_logs(e, ctx)
         raise
     except Exception as e:  # noqa: BLE001 - convert anything into a structured error
-        raise DecryptError(category="internal", message=f"{type(e).__name__}: {e}",
+        err = DecryptError(category="internal", message=f"{type(e).__name__}: {e}",
                            step=step_name, direction=direction, channel=ctx.channel)
+        _attach_logs(err, ctx)
+        raise err
 
 
 class Engine:

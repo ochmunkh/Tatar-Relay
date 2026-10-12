@@ -19,6 +19,7 @@ CATEGORIES = (
     "signature_invalid", # HMAC / signature check failed
     "type_mismatch",     # a step received the wrong DataType
     "locate_failed",     # no envelope locate strategy matched
+    "decode_failed",     # a codec/prefix step could not read this message
     "extraction_failed", # a variable could not be extracted
     "scope_violation",   # host/path outside the profile's authorized scope
     "profile_invalid",   # the profile itself failed validation
@@ -71,6 +72,12 @@ class DecryptError(RelayError):
 class ScopeViolation(RelayError):
     """Raised (fail-closed) when a profile is used outside its authorized scope."""
 
+    # Contract #4 category, so a frontend can triage this like a DecryptError
+    # instead of seeing it flattened to "internal".
+    category = "scope_violation"
+
 
 class ProfileError(RelayError):
     """Raised when a profile fails to load or validate."""
+
+    category = "profile_invalid"

@@ -212,9 +212,12 @@ class Context:
 ## 3. Pipeline Гүйцэтгэлийн Дэс Дараалал
 
 ```
-Engine.decrypt("request", wire_bytes, ctx)
+Profile.authorize(host, path=None)          # fail-closed, frontend-д
+                                            # path=None бол зөвхөн host;
+                                            # path байвал check_scope хоёуланг
+                                            # (cli.py, bridge.py дуудна)
 │
-├─ Profile.check_scope(host, path)          # fail-closed
+Engine.decrypt("request", wire_bytes, ctx)
 │
 ├─ ChannelPipeline.decrypt(body, ctx)
 │    │

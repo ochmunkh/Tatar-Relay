@@ -1,110 +1,195 @@
 # Contributing to Tatar Relay
 
-Contributions and forks are welcome. Tatar Relay only stays composable if its
-core shape is kept, so please build **with** the architecture, not around it.
+> **Translation wanted.** This file is English-only for now. The project's
+> README and quickstart are bilingual on purpose (see *Documentation* below);
+> a Mongolian counterpart to this guide is welcome and should be written by a
+> Mongolian speaker, not machine-translated.
 
-## Ground rules
+## Getting set up
 
-- **Authorized testing only.** Examples, tests, and issues use **synthetic data
-  only** — never real hosts, keys, captures, or client/vendor names.
-- **Keep it reproducible.** New transforms are reversible and covered by tests.
-- **Be honest in docs.** Don't claim a capability the code doesn't have.
+```bash
+git clone https://github.com/ochmunkh/Tatar-Relay
+cd Tatar-Relay
+pip install -e ".[dev]"
+pytest -q
+```
 
-## The architecture to preserve
+`[dev]` pulls in pytest; `[mitmproxy]` pulls in the proxy frontend. The test
+suite is offline and takes well under a second — run it before every commit.
 
-**The Python core is authoritative.** Every frontend (Burp/Java, mitmproxy, CLI)
-talks to it; none re-implements crypto on its own side. New capability goes into
-the core as a **step or a profile**, not into a frontend.
+## The version has exactly one source of truth
 
-**The pipeline is fixed: Envelope → Transform → Reseal.**
-- *Envelope* locates the ciphertext (and any encrypted headers) and keeps the rest.
-- *Transform* is an ordered, **reversible** chain: `forward` decrypts, `backward`
-  is its exact inverse — `decrypt(encrypt(x)) == x` must hold.
-- *Reseal* re-applies integrity (nonce / timestamp / HMAC) on the way out.
+**`tatar_relay/__init__.py` — the `__version__` literal. Nothing else.**
 
-**The five frozen contracts** (`CONTRACTS.md`) — add, never rename/remove:
-1. **Profile v1 schema** (`profile.py`) — `name`, fail-closed `scope.hosts`, `vars`, `request`/`response` each `{envelope, transform, reseal}`.
-2. **Context API** (`context.py`) — per-flow state lives in `session`, never module globals.
-3. **Step interface** (`steps/base.py`) — `forward`/`backward` (exact inverse) + `in_type`/`out_type`, registered with `@register("name")`.
-4. **Error taxonomy** (`errors.py`) — raise `DecryptError` with a category from the closed vocabulary; the proxy never crashes.
-5. **Bridge JSON-RPC** (`bridge.py`) — the message contract between core and frontends.
+A release bumps that one line. Everything else derives from it or is checked
+against it:
 
-**Config-first.** Behavior lives in YAML profiles, not code. Reach for a profile
-plus an existing step first; add a new step only when no composition covers it.
+| Place | How it gets the version |
+| --- | --- |
+| `pyproject.toml` | `dynamic = ["version"]` + `version = { attr = "tatar_relay.__version__" }` — setuptools reads the attribute, so the number is never restated here |
+| `relay --version` | `tatar_relay/cli.py` formats `__version__` |
+| installed metadata (`pip show tatar-relay`) | comes from `pyproject.toml`, so from `__version__` |
+| `CHANGELOG.md` | the newest `## [x.y.z]` heading must equal `__version__` — this one is not derived, it is *checked* |
 
-**Security boundary — keep it fail-closed.**
-- A profile with no allowed `scope.hosts` must not load.
-- Untrusted / community profiles stay **declarative-only**
-  (`allow_python_hooks: false` by default); Python hooks are opt-in for trusted
-  local profiles only.
-- A new step must degrade safely on hostile input (categorized `DecryptError`,
-  no uncaught exception, no unbounded allocation).
+This is not a style preference. `relay --version` printed `0.1.0` at tag
+`v0.6.1` because `pyproject.toml` and `__init__.py` were two hand-maintained
+copies, and the one string a user pastes into a bug report was the wrong one.
 
-## How to extend without breaking it
+[`tests/test_version.py`](tests/test_version.py) fails the build if any of
+those four disagree, and also fails if someone reintroduces a second literal in
+`pyproject.toml`.
 
-- **Add a cipher/codec** → a new `@register` step with a real `backward`, a
-  round-trip test (`decrypt(encrypt(x)) == x`), and a hostile-input test.
-- **Support a new target** → a YAML profile under `examples/`, synthetic data only.
-- **New frontend** → speak the bridge JSON-RPC; don't duplicate crypto.
-- **Changing a frozen contract** → additive only; a rename/removal is breaking
-  and needs a version bump + discussion first.
+### Cutting a release
 
-## Workflow
+1. Edit `__version__` in `tatar_relay/__init__.py`.
+2. Rename the `## [Unreleased]` heading in `CHANGELOG.md` to `## [x.y.z] — YYYY-MM-DD`
+   and open a fresh `## [Unreleased]` above it.
+3. `pytest -q` — `tests/test_version.py` confirms the four places agree.
+4. Tag `vx.y.z`.
 
-1. Fork, branch from `main`.
-2. `pip install -e . pytest` and make sure `pytest -q` is green (and stays green).
-3. Keep commits focused; write clear messages.
-4. Open a PR describing *what* changed and *why*. CI runs the tests and builds
-   the Burp jar — keep both green.
+Nothing else needs touching. In particular, do **not** add a `version = "..."`
+line to `pyproject.toml`; the test rejects it.
 
-By submitting a contribution you agree it is licensed under the project's MIT
-license.
+The Burp extension in [`burp/`](burp/) carries its own, independent version
+(`burp/build.gradle`) because it ships as a separate `.jar`. It is deliberately
+not tied to the Python package version.
+
+## Documentation
+
+- **`README.md` is bilingual and stays bilingual.** It has an English half
+  (`## English`) and a Mongolian half (`## Монгол`). Both halves are a product
+  decision for a Mongolian-speaking audience — never delete one, and never
+  machine-translate one into the other. If you add a section to one half and
+  cannot write idiomatic technical Mongolian, say so in your pull request so a
+  Mongolian speaker can write the counterpart.
+- [`tools/readme_parity.py`](tools/readme_parity.py) compares the two halves
+  structurally — heading count, fenced code-block count, table row count — and
+  fails with the specific mismatch. CI runs it as its own step, and
+  `tests/test_docs_consistency.py` runs the same comparison:
+
+  ```bash
+  python3 tools/readme_parity.py
+  ```
+
+- `tests/test_docs_consistency.py` also checks that every documented test count
+  matches what pytest collects, and that every backticked file link in the
+  top-level docs resolves on disk. If you add or remove tests, update the counts
+  in **both** README halves and in the newest `CHANGELOG.md` entry.
+- The five frozen contracts in [`CONTRACTS.md`](CONTRACTS.md) are frozen:
+  additive changes only, never a breaking one.
+
+## The Burp extension
+
+Building it needs a JDK, not Gradle — see [`burp/BUILD.md`](burp/BUILD.md) for
+the exact commands.
+
+## Supported Python versions
+
+`pyproject.toml` declares `requires-python = ">=3.9"`, and CI tests **3.9 and
+3.13** so that floor cannot rot. 3.9 was verified for the first time on
+2026-09-30 — 232 passed under CPython 3.9.25 — after a period where only the
+newest interpreter was exercised and the declared floor was an unchecked claim.
+
+Keeping 3.9 working in practice means:
+
+- annotations using `X | None` need `from __future__ import annotations` at the
+  top of the file (every module already has it where required);
+- no `match`/`case`, no `ExceptionGroup`/`except*`, no `tomllib`;
+- `ruff` runs with `--target-version py39`, so syntax newer than the floor is a
+  lint error as well as a test failure.
+
+If the floor is ever raised, change `requires-python`, the ruff target and the
+CI matrix together.
+
+## CI
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push and
+pull request, in three jobs:
+
+| Job | What it does |
+|---|---|
+| `lint` | a scoped `ruff` pass (only the rules that flag real errors — syntax, undefined names, broken asserts) at `--target-version py39`, then the README parity check. Neither varies by interpreter, so both run once. |
+| `test` | a 3.9 + 3.13 matrix: install with the `dev` extra, then `pytest -q`. `fail-fast` is off so one interpreter breaking does not hide the other. |
+| `build-jar` | compiles the Burp extension with `.github/build-jar.sh` (JDK 17, no Gradle). [`release.yml`](.github/workflows/release.yml) runs the same script on a `v*` tag, so this is what keeps releases buildable. |
+
+## Scope of a change
+
+- Python hooks are arbitrary code execution, so untrusted profiles stay
+  declarative-only and scope stays fail-closed. Do not relax either default.
+- Transform steps must stay reversible: `decrypt(encrypt(x)) == x` is enforced
+  by the suite.
+- Add a test with every fix. Never weaken or delete a test to go green.
+
+## Licence
+
+MIT. By contributing you agree your contribution is licensed under it.
 
 ---
 
-# Tatar Relay-д хувь нэмэр оруулах
+<a id="монгол"></a>
 
-Хувь нэмэр, fork тавтай морил. Tatar Relay-ийн гол бүтцийг хадгалж байж л нийлмэл
-(composable) хэвээр үлдэнэ — архитектурыг тойрч биш, **түүнтэй нийцүүлж** хөгжүүл.
+## Монгол
 
-## Үндсэн дүрэм
+Энэ баримтын англи хэсэг нь бүрэн лавлагаа. Доорх нь хамгийн чухал дүрмүүдийн
+хураангуй — дэлгэрэнгүйг дээрээс уншина уу.
 
-- **Зөвхөн зөвшөөрөлтэй тест.** Жишээ, тест, issue бүгд **зохиомол өгөгдөлтэй** —
-  бодит host, түлхүүр, capture, клиент/vendor нэр хэзээ ч бүү тавь.
-- **Давтагдах чадвартай бай.** Шинэ transform нь буцаах боломжтой, тесттэй.
-- **Баримтдаа шударга бай.** Кодод байхгүй боломжийг байгаа мэт бүү бич.
+### Орчин бэлдэх
 
-## Хадгалах архитектур
+```bash
+git clone https://github.com/ochmunkh/Tatar-Relay
+cd Tatar-Relay
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q
+```
 
-**Python core нь эрх мэдэлтэй.** Бүх frontend түүн рүү хандана; аль нь ч
-шифрлэлтийг өөр дээрээ дахин бичихгүй. Шинэ боломж нь **step эсвэл profile** болж
-core-д орно.
+### Хувилбарын НЭГ эх сурвалж
 
-**Pipeline тогтмол: Envelope → Transform → Reseal.** Transform нь буцаах боломжтой
-(`decrypt(encrypt(x)) == x`). Reseal гарахдаа бүрэн бүтэн байдлыг дахин тавина.
+**`tatar_relay/__init__.py`-ийн `__version__` бол цорын ганц эрх бүхий эх
+сурвалж.** `pyproject.toml` нь түүнээс уншдаг (`version = { attr = ... }`), мөн
+`CHANGELOG.md`-ийн хамгийн сүүлийн гарсан гарчиг, git tag бүгд түүнтэй таарна.
+`tests/test_version.py` эдгээрийг тулгаж шалгах тул зөрвөл CI унана.
 
-**Таван frozen contract** (`CONTRACTS.md`) — зөвхөн нэм, бүү нэрлэ/устга:
-Profile схем · Context API (`session`, module global биш) · Step интерфейс
-(`forward`/`backward`, `@register`) · Алдааны ангилал (`DecryptError`) ·
-Bridge JSON-RPC.
+Хувилбар ахиулах дараалал: `__version__`-ыг өөрчлөх → `CHANGELOG.md`-д шинэ
+гарчиг нэмэх → `pytest -q` ногоон эсэхийг шалгах → merge хийсний дараа
+`git tag vX.Y.Z`.
 
-**Config-first.** Үйлдэл YAML profile-д, кодод биш.
+### Баримт
 
-**Аюулгүй байдлын хил — fail-closed.** `scope.hosts`-гүй profile ачаалагдахгүй;
-untrusted profile нь declarative-only; шинэ step хорлонтой өгөгдөлд аюулгүй унана.
+README нь хоёр хэлтэй бөгөөд хоёр хэсгийн **бүтэц** таарах ёстой —
+`tools/readme_parity.py` үүнийг CI дээр шалгана. Нэг талд хэсэг, хүснэгт, кодын
+блок нэмбэл нөгөөд нь ч нэм.
 
-## Эвдэлгүйгээр өргөтгөх
+**Монгол текстийг машинаар орчуулж БОЛОХГҮЙ.** Дутуу байвал англиар үлдээж,
+`docs/TRANSLATION_NEEDED.md`-д тэмдэглэ — муу монгол бичихээс ил тод дутагдал нь
+дээр.
 
-- Cipher/codec → жинхэнэ `backward`-тай `@register` step + round-trip + hostile тест.
-- Шинэ target → `examples/`-д YAML profile, зөвхөн зохиомол өгөгдөл.
-- Шинэ frontend → bridge JSON-RPC ярь; шифрлэлт бүү давхардуул.
-- Frozen contract өөрчлөх → зөвхөн additive; нэрлэх/устгах нь breaking.
+Тестийн тоо README-д бичигдсэн байдаг ба `tests/test_docs_consistency.py` нь
+pytest-ийн бодитоор цуглуулсан тоотой тулгадаг. Тест нэмбэл тэр тоог бас шинэчил.
 
-## Ажлын урсгал
+### Дэмжигдэх Python хувилбар
 
-1. Fork, `main`-ээс салбар гарга.
-2. `pip install -e . pytest`, `pytest -q` ногоон байг.
-3. Commit-оо цэгцтэй, тодорхой мессежтэй бич.
-4. Юу, яагаад өөрчилснийг тайлбарласан PR нээ. CI тест + jar build-ийг шалгана.
+`pyproject.toml` нь `requires-python = ">=3.9"` гэж зарласан бөгөөд CI нь **3.9
+ба 3.13** хоёуланг тестлэдэг тул тэр доод хязгаар хуучрахгүй. 3.9-д ажиллуулахын
+тулд:
 
-Хувь нэмэр оруулснаар түүнийгээ төслийн MIT лицензийн дор нийтлэхийг зөвшөөрч байна.
+- `X | None` хэлбэрийн annotation-тай файл бүр эхэндээ
+  `from __future__ import annotations` агуулна;
+- `match`/`case`, `ExceptionGroup`/`except*`, `tomllib` хэрэглэхгүй;
+- `ruff` нь `--target-version py39`-ээр ажилладаг тул доод хязгаараас шинэ
+  syntax нь lint алдаа болно.
+
+### CI
+
+`ci.yml` нь push ба pull request бүр дээр гурван job ажиллуулна: `lint`
+(ruff + README parity), `test` (3.9/3.13 matrix дээр pytest), `build-jar` (Burp
+extension-ыг compile хийж, mock ачаалалтын тест ажиллуулна).
+
+### Өөрчлөлтийн хүрээ
+
+Нэг PR — нэг сэдэв. Крипто алгоритмын өөрчлөлт бүр тесттэй байна. Эвдэрсэн
+тесттэй commit хийхгүй.
+
+### Лиценз
+
+MIT. Хувь нэмэр оруулснаар өөрийн кодоо MIT-ээр гаргахыг зөвшөөрч байна.

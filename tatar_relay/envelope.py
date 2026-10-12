@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, List
+from typing import List
 
 from .context import Context
 from .errors import DecryptError

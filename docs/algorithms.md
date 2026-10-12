@@ -6,6 +6,32 @@ Transform step бүр **forward** (decrypt) болон **backward** (encrypt) ч
 
 ---
 
+### Түлхүүр хэрхэн байт болж уншигдах вэ (нэг дүрэм)
+
+`aes_decrypt`, `chacha20_decrypt`, `hmac_verify` болон reseal `sign` бүгд
+`variables.coerce_key()` гэсэн нэг дүрмийг хэрэглэнэ — ингэснээр нэг
+`${session_key}` бүх step-д ижил байт болно (`examples/acme-bank-mobile.yaml`
+нь нэг хувьсагчийг `aes_decrypt` ба `sign` хоёуланд өгдөг):
+
+| Утга | Уншлага |
+|------|---------|
+| `bytes` | байтаар шууд (`--var`, bridge `vars` ингэж ирдэг) |
+| `str:<текст>` | UTF-8 |
+| `hex:<hex>` | hex decode |
+| `b64:<base64>` | base64 decode |
+| prefix-гүй string | hex цэвэр уншигдвал hex, үгүй бол UTF-8 |
+
+Prefix-гүй уншлага **hex талыг эрхэмлэдэг**: AES түлхүүрийг бичих хэвийн
+хэлбэр бол 32/48/64 hex тэмдэгт. Зөвхөн hex цифрээс тогтсон **текст** түлхүүр
+байвал `str:` prefix зайлшгүй тавь — эс бөгөөс хоёр дахин багасаж
+`padding` / `tag_mismatch` / `wrong_key_size` гарна. Сонгосон уншлагыг step нь
+`ctx.log()`-оор хэлдэг тул `relay preview` дээр харагдана.
+
+`evp_aes_decrypt`-ын `passphrase` нь текст байх үүргэтэй бөгөөд энэ дүрэмд
+хамаарахгүй.
+
+---
+
 ### `aes_decrypt` — AES Симметрик Шифр
 
 **Файл:** `tatar_relay/steps/crypto.py`
@@ -322,19 +348,20 @@ transform:
       file: hooks/ecdh_gcm.py
       forward: decrypt_field
       backward: encrypt_field
-      params:
-        field: data
-        key_var: session_key
 ```
 
-Hook функц signature:
+> `python` step нь `file` / `forward` / `backward` гурвыг л уншдаг
+> (`tatar_relay/steps/pyhook.py`). Тэнд `params:` блок бичвэл уншигдахгүй, алдаа
+> ч гарахгүй — hook-д шаардлагатай утгыг `ctx.vars`-аас авна.
+
+Hook функц signature (Frozen Contract #3 — хоёр аргумент):
 
 ```python
-def decrypt_field(data: bytes, ctx, params: dict) -> bytes:
+def decrypt_field(data: bytes, ctx) -> bytes:
     """forward direction."""
     ...
 
-def encrypt_field(data: bytes, ctx, params: dict) -> bytes:
+def encrypt_field(data: bytes, ctx) -> bytes:
     """backward direction."""
     ...
 ```
@@ -348,7 +375,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import json, base64, os
 
-def decrypt_field(data: bytes, ctx, params: dict) -> dict:
+def decrypt_field(data: bytes, ctx) -> dict:
     body = json.loads(data)
     # ... ECDH key agreement, HKDF, AESGCM decrypt ...
     return plaintext_dict

@@ -78,9 +78,15 @@ Login бүрт key өөрчлөгддөг тул hook-оор автоматаа�
 
 ---
 
-## `start-bridge.bat` (нэг даблаар асаах)
+## `start-bridge.bat` (нэг даблаар асаах — Windows)
 
-Repo-д багтсан `start-bridge.bat` нь bridge-ийг `--capture`-тэй асаана.
+Repo-д багтсан `start-bridge.bat` нь bridge-ийг `--capture`-тэй асаана. Энэ нь
+Windows-д дабл дарж асаахад зориулсан боломж — Linux/macOS дээр ижил зүйлийг
+repo-гийн хавтаснаас терминалаар шууд асаана:
+
+```bash
+relay bridge examples/acme-bank-mobile.yaml --capture
+```
 
 - **Даблдах** → анхдагч profile (`examples\acme-bank-mobile.yaml`) ашиглана.
 - **Өөрийн profile-оор:** cmd-д `start-bridge.bat examples\<profile>.yaml`,

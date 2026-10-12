@@ -39,10 +39,10 @@ class Base64Decode(Step):
         try:
             out = base64.b64decode(_as_bytes(data), validate=False)
         except (binascii.Error, ValueError) as e:
-            raise DecryptError(category="config_error", message=f"base64 decode: {e}",
+            raise DecryptError(category="decode_failed", message=f"base64 decode: {e}",
                                step=self.name, direction="forward")
         if self.max_size and len(out) > self.max_size:
-            raise DecryptError(category="config_error",
+            raise DecryptError(category="decode_failed",
                                message=f"base64 decode: output exceeds cap ({self.max_size} bytes)",
                                step=self.name, direction="forward")
         return out
@@ -60,7 +60,7 @@ class HexDecode(Step):
         try:
             return bytes.fromhex(_as_bytes(data).decode("ascii").strip())
         except (ValueError, UnicodeDecodeError) as e:
-            raise DecryptError(category="config_error", message=f"hex decode: {e}",
+            raise DecryptError(category="decode_failed", message=f"hex decode: {e}",
                                step=self.name, direction="forward")
 
     def backward(self, data, ctx: Context) -> str:
@@ -92,20 +92,20 @@ class Gunzip(Step):
                 out += chunk
                 if limit and len(out) > limit:
                     raise DecryptError(
-                        category="config_error",
+                        category="decode_failed",
                         message=f"gunzip: output exceeds cap ({limit} bytes) "
                                 f"— possible decompression bomb",
                         step=self.name, direction="forward")
             out += d.flush()
             if not d.eof:
-                raise DecryptError(category="config_error",
+                raise DecryptError(category="decode_failed",
                                    message="gunzip: truncated or incomplete gzip stream",
                                    step=self.name, direction="forward")
         except (OSError, EOFError, zlib.error) as e:
-            raise DecryptError(category="config_error", message=f"gunzip: {e}",
+            raise DecryptError(category="decode_failed", message=f"gunzip: {e}",
                                step=self.name, direction="forward")
         if limit and len(out) > limit:
-            raise DecryptError(category="config_error",
+            raise DecryptError(category="decode_failed",
                                message=f"gunzip: output exceeds cap ({limit} bytes) "
                                        f"— possible decompression bomb",
                                step=self.name, direction="forward")
@@ -182,20 +182,20 @@ class NonceBody(Step):
         try:
             s = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else str(data)
         except UnicodeDecodeError as e:
-            raise DecryptError(category="config_error",
+            raise DecryptError(category="decode_failed",
                                message=f"nonce_body: field is not UTF-8 text: {e}",
                                step=self.name, direction="forward")
         s = s.strip()
         n = self._prefix_chars()
         if len(s) < n:
-            raise DecryptError(category="config_error",
+            raise DecryptError(category="decode_failed",
                                message="nonce_body: field shorter than the nonce prefix",
                                step=self.name, direction="forward")
         try:
             nonce = _dec_seg(s[:n], self.nonce_encoding)
             body = _dec_seg(s[n:], self.body_encoding)
         except (ValueError, binascii.Error) as e:
-            raise DecryptError(category="config_error", message=f"nonce_body: decode failed: {e}",
+            raise DecryptError(category="decode_failed", message=f"nonce_body: decode failed: {e}",
                                step=self.name, direction="forward")
         return nonce + body
 
@@ -259,13 +259,13 @@ class StripPrefix(Step):
         if self.value_tmpl is not None:
             pref = self._static_prefix(ctx)
             if not data.startswith(pref):
-                raise DecryptError(category="config_error",
+                raise DecryptError(category="decode_failed",
                                    message="strip_prefix: expected constant prefix not present",
                                    step=self.name, direction="forward")
             return data[len(pref):]
         n = int(self.length)
         if len(data) < n:
-            raise DecryptError(category="config_error",
+            raise DecryptError(category="decode_failed",
                                message="strip_prefix: blob shorter than prefix length",
                                step=self.name, direction="forward")
         ctx.session.setdefault(self._SESSION_KEY, {})[id(self)] = data[:n]
@@ -278,7 +278,7 @@ class StripPrefix(Step):
         saved = ctx.session.get(self._SESSION_KEY, {}).get(id(self))
         if saved is None:
             raise DecryptError(
-                category="config_error",
+                category="decode_failed",
                 message="strip_prefix: no captured prefix to restore "
                         "(length mode needs a prior decrypt in this flow; use "
                         "'value' to encrypt from scratch)",

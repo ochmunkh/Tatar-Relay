@@ -7,7 +7,8 @@ high-volume (Intruder) traffic.
 
 Message shapes (contract):
   Burp → Core   {"method":"decrypt","channel":"request","profile":"acme",
-                 "wire":"<base64>","flow_id":"a1","vars":{"session_key":"<hex>"}}
+                 "wire":"<base64>","flow_id":"a1","vars":{"session_key":"<hex>"},
+                 "host":"api.example.com","path":"/v2/pay"}
   Core → Burp   {"ok":true,"plaintext":<json>,"ctx_token":"t-9f"}
   Burp → Core   {"method":"encrypt","channel":"request","plaintext":<json>,"ctx_token":"t-9f"}
   Core → Burp   {"ok":true,"wire":"<base64>","diff":{"changed_bytes":14}}
@@ -18,6 +19,13 @@ Key capture (v0.3):
   examples/js-hooks/session_key_capture.js calls this endpoint after
   deriving the ECDH session key; the bridge then injects the key into
   captured_vars so every subsequent decrypt call can use it automatically.
+
+Scope:
+  "host" and "path" are OPTIONAL and additive. When a frontend supplies "host",
+  the profile's fail-closed scope is enforced per request before anything is
+  decrypted (ScopeViolation -> the normal {"ok":false,"error":{...}} shape).
+  A frontend that sends no host is NOT scope-checked — cmd_bridge warns about
+  that at startup.
 """
 from __future__ import annotations
 
@@ -31,6 +39,7 @@ from .context import Context, HttpMessage
 from .engine import Engine
 from .errors import RelayError, DecryptError
 from .profile import Profile
+from .variables import coerce_key
 
 
 class BridgeService:
@@ -79,7 +88,11 @@ class BridgeService:
         except DecryptError as e:
             return {"ok": False, "error": e.as_dict()}
         except RelayError as e:
-            return {"ok": False, "error": {"category": "internal", "message": str(e)}}
+            # ScopeViolation/ProfileError carry a Contract #4 category; only a
+            # genuinely unclassified RelayError falls back to "internal".
+            return {"ok": False,
+                    "error": {"category": getattr(e, "category", "internal"),
+                              "message": str(e)}}
 
     def _profile(self, name: str | None) -> Profile:
         if not name:
@@ -94,23 +107,22 @@ class BridgeService:
     def _decrypt(self, msg: dict) -> dict:
         profile = self._profile(msg.get("profile"))
         channel = msg.get("channel", "request")
-        ctx = Context(request=HttpMessage(host=profile.scope.hosts[0]))
+        # Scope is fail-closed, but only a frontend that tells us WHERE the flow
+        # is going can be checked; the host used to be fabricated from the
+        # profile's own scope list, so the check could never fail.
+        host = msg.get("host") or ""
+        path = msg.get("path") or None
+        if host:
+            profile.authorize(host, path)
+        ctx = Context(request=HttpMessage(
+            host=host or (profile.scope.hosts[0] if profile.scope.hosts else ""),
+            path=path or ""))
         vs = profile.new_varstore(ctx)
         merged = {**self.default_vars, **self.captured_vars, **(msg.get("vars") or {})}
         for k, v in merged.items():
             # var values default to HEX (session keys); prefix str:/b64:/hex:
             # to pass a passphrase (e.g. an ecode) or other encodings.
-            if isinstance(v, (bytes, bytearray)):
-                vv = bytes(v)
-            elif isinstance(v, str) and v.startswith("str:"):
-                vv = v[4:].encode("utf-8")
-            elif isinstance(v, str) and v.startswith("b64:"):
-                vv = base64.b64decode(v[4:])
-            elif isinstance(v, str) and v.startswith("hex:"):
-                vv = bytes.fromhex(v[4:])
-            else:
-                vv = bytes.fromhex(v)
-            vs.set(k, vv)
+            vs.set(k, coerce_key(v, f"var {k!r}", bare="hex"))
         ctx.vars = vs
         eng = Engine(profile)
         wire = base64.b64decode(msg["wire"])
@@ -137,7 +149,8 @@ def _byte_diff(a: bytes, b: bytes) -> int:
 def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799,
                capture_port: Optional[int] = None,
                capture_key_var: str = "session_key",
-               observe_path: Optional[str] = "observations.jsonl") -> None:
+               observe_path: Optional[str] = "observations.jsonl",
+               capture_token: Optional[str] = None) -> None:
     """Minimal localhost JSON-RPC server (debug transport).
 
     If capture_port is set, also starts the JS key-capture server on that port.
@@ -162,7 +175,8 @@ def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799
             print(f"[tatar-relay] {tag}: {summ}")
 
         serve_capture(cap, host=host, port=capture_port, block=False,
-                      on_key=_on_key, observations=obs_log, on_observe=_on_observe)
+                      on_key=_on_key, observations=obs_log, on_observe=_on_observe,
+                      token=capture_token)
         print(f"tatar-relay capture  on http://{host}:{capture_port}/key  "
               f"(var={capture_key_var!r})")
         print(f"tatar-relay observe  on http://{host}:{capture_port}/observe  "

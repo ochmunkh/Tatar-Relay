@@ -6,6 +6,7 @@ ever.
 """
 from __future__ import annotations
 
+import base64
 import os
 import re
 import time
@@ -105,6 +106,67 @@ class Renderer:
         if isinstance(val, (bytes, bytearray)):
             return bytes(val)
         return str(val).encode("utf-8")
+
+
+# -- key coercion ---------------------------------------------------------
+
+def coerce_key(value: Any, label: str = "key", *, bare: str = "auto") -> bytes:
+    """Coerce a key/secret var to bytes — the ONE rule, shared by every caller.
+
+    ``hmac_verify`` and reseal ``sign`` are the two ends of the same round-trip,
+    so they have to read the same var the same way; before this was shared they
+    did not, and a text ``session_key`` was verified with 32 hex-decoded bytes
+    and re-signed with 64 UTF-8 ones.
+
+    Explicit prefixes remove the auto-hex ambiguity, so a raw UTF-8 key that
+    happens to look like hex is not silently halved:
+
+        str:<text>   -> UTF-8 bytes
+        hex:<hex>    -> hex-decoded
+        b64:<base64> -> base64-decoded
+
+    A bare (unprefixed) value follows ``bare``:
+
+        "auto"  hex if it parses cleanly, else UTF-8 — backward compatible, and
+                what the steps (``hmac_verify``, ``sign``, the ciphers) use.
+        "hex"   strict hex, raising on anything else — what ``--var`` and the
+                bridge's ``vars`` document ("bare = hex").
+
+    ``label`` prefixes the error message with the caller's name.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    if isinstance(value, str):
+        if value.startswith("str:"):
+            return value[4:].encode("utf-8")
+        if value.startswith("hex:"):
+            try:
+                return bytes.fromhex(value[4:])
+            except ValueError as e:
+                raise DecryptError(category="config_error",
+                                   message=f"{label}: bad hex key: {e}")
+        if value.startswith("b64:"):
+            try:
+                pad = (4 - len(value[4:]) % 4) % 4
+                return base64.b64decode(value[4:] + "=" * pad)
+            except Exception as e:  # noqa: BLE001 - binascii raises several types
+                raise DecryptError(category="config_error",
+                                   message=f"{label}: bad base64 key: {e}")
+        if bare == "hex":
+            try:
+                return bytes.fromhex(value)
+            except ValueError:
+                raise DecryptError(
+                    category="config_error",
+                    message=f"{label}: {value!r} is not hex — use str:<text>, "
+                            f"b64:<base64>, or hex:<hex>")
+        # Bare value: hex if it parses cleanly, else UTF-8 (backward compat).
+        try:
+            return bytes.fromhex(value)
+        except ValueError:
+            return value.encode("utf-8")
+    raise DecryptError(category="config_error",
+                       message=f"{label}: cannot convert {type(value).__name__} to bytes")
 
 
 # -- extraction -----------------------------------------------------------

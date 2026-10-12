@@ -19,7 +19,7 @@ import json
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 _B64_STD = re.compile(rb"^[A-Za-z0-9+/=\r\n]+$")
 _B64_URL = re.compile(rb"^[A-Za-z0-9_\-=\r\n]+$")

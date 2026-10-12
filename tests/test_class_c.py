@@ -94,7 +94,8 @@ def test_strip_prefix_constant_missing_raises():
     step = build_step({"strip_prefix": {"value": "deadbeef", "encoding": "hex"}})
     with pytest.raises(DecryptError) as e:
         step.forward(b"no-such-prefix-here", _ctx())
-    assert e.value.category == "config_error"
+    # runtime data mismatch, not a bad profile -> decode_failed (see errors.py)
+    assert e.value.category == "decode_failed"
 
 
 def test_strip_prefix_length_mode_roundtrip_in_flow():
@@ -110,7 +111,7 @@ def test_strip_prefix_length_mode_from_scratch_raises():
     step = build_step({"strip_prefix": {"length": 4}})
     with pytest.raises(DecryptError) as e:
         step.backward(b"payload", _ctx())        # no prior decrypt -> nothing to restore
-    assert e.value.category == "config_error"
+    assert e.value.category == "decode_failed"
 
 
 def test_strip_prefix_needs_value_or_length():

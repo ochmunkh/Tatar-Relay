@@ -39,4 +39,4 @@ burp/build/
 
 verify-ecode.py
 sample.json
-Claude outputs/
+_outputs/
