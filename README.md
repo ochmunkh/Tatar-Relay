@@ -47,8 +47,15 @@ and it re-encrypts and re-seals (HMAC, nonce, timestamp) on the way out — for 
 
 ### Why not just X?
 
-The pieces exist elsewhere — but the *integrated, config-first* version does not.
+Adjacent tools each cover part of this — the difference is the *combination* and
+where it runs.
 
+- **CrypticBurp** is the closest: it also decrypts, edits, and re-encrypts
+  request/response bodies in Burp from a config profile. Tatar Relay overlaps
+  there — the difference is the rest of the workflow: a chainable, reversible
+  transform pipeline, `inspect` that fingerprints a blob and drafts a profile,
+  and the *same core* reachable from a CLI, a mitmproxy addon, and a JSON-RPC
+  bridge, not Burp alone.
 - **Hackvertor** does inline crypto in Burp, but per-request and tag-based — no
   reusable per-target profile, no live key capture, no cipher detection.
 - **CyberChef** has the transforms, but it's not a proxy and isn't wired into the
@@ -173,7 +180,7 @@ pytest            # 240 tests: unit + round-trip + golden + fuzz/hostile-input
   re-encrypt write-back, `strip_prefix` codec.
 - **v0.6** — native `evp_aes_decrypt` (EVP_BytesToKey/MD5 passphrase mode); bridge typed
   var coercion (`str:` / `b64:` / `hex:`); Windows console Unicode fix.
-- **next** — hook sandbox (isolate Python hooks from untrusted profiles), then RSA/ECDH native derive, Intruder payload support, WebSocket.
+- **next** — hook sandbox (isolate Python hooks from untrusted profiles), then native key derivation (ECDH / HKDF / RSA-hybrid), Intruder payload support, WebSocket.
 
 ### License
 
@@ -201,8 +208,14 @@ timestamp) хийж, **request болон response** хоёуланг дэмжи
 
 ### Яагаад өөр tool биш вэ?
 
-Эдгээр боломжууд тус тусдаа байдаг — харин бүгдийг нэгтгэсэн, **config-first** шийдэл байдаггүй.
+Ойролцоо хэрэгслүүд тус бүр хэсгийг нь хийдэг — ялгаа нь **хослол** болон хаана
+ажилладагт.
 
+- **CrypticBurp** хамгийн ойр: энэ нь мөн config profile-аар Burp дотор
+  request/response body-г тайлж, засаж, дахин шифрлэдэг. Tatar Relay энд
+  давхцана — ялгаа нь үлдсэн workflow: гинжлэх боломжтой reversible transform
+  pipeline, blob-ыг fingerprint хийж профайл зурдаг `inspect`, мөн **ижил core**-ыг
+  CLI, mitmproxy addon, JSON-RPC bridge-ээр ашиглах — зөвхөн Burp биш.
 - **Hackvertor** Burp дотор inline крипто хийдэг ч per-request, tag-төвтэй — target
   бүрт дахин ашиглах профайл, live key capture, cipher илрүүлэлт байхгүй.
 - **CyberChef** transform-уудтай ч proxy биш, Burp урсгалд ороогүй.
@@ -309,7 +322,7 @@ pytest            # 240 тест: unit + round-trip + golden + fuzz/дайсаг
   header-ийг буцааж шифрлэж бичэх, `strip_prefix` codec.
 - **v0.6** — native `evp_aes_decrypt` (EVP_BytesToKey/MD5 passphrase-mode); bridge-ийн
   typed var coercion (`str:` / `b64:` / `hex:`); Windows console Unicode засвар.
-- **дараагийн** — hook sandbox (итгэмжлэгдээгүй profile-ын Python hook-ыг тусгаарлах), дараа нь RSA/ECDH native derive, Intruder payload, WebSocket.
+- **дараагийн** — hook sandbox (итгэмжлэгдээгүй profile-ын Python hook-ыг тусгаарлах), дараа нь native key derivation (ECDH / HKDF / RSA-hybrid), Intruder payload, WebSocket.
 
 ### Лиценз
 
