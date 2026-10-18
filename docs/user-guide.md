@@ -368,6 +368,7 @@ transform:
 
 ```bash
 relay preview <profile.yaml> -i <wire.bin>   # алхам тутам тайлж харах (debug)
+relay explain <profile.yaml>                 # pipeline-ийг (нууцгүй) статикаар тайлбарлана
 relay validate <profile.yaml>                # profile шалгана (+ --sample round-trip)
 relay run <profile.yaml> -i <wire.bin>       # барьсан body-г тайлна (+ --roundtrip)
 relay steps                                  # боломжтой transform step-үүд

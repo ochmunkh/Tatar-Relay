@@ -9,6 +9,21 @@
 ## [Unreleased]
 
 ### Нэмэгдсэн зүйлс
+- **`relay explain`** — профайлын pipeline-ийг нууц мэдээлэлгүйгээр статикаар
+  тайлбарлана (envelope locate, step бүрийн in→out type, header дэд-pipeline,
+  reseal). `preview`-ээс ялгаатай нь бодит дата/түлхүүр шаардахгүй; литерал
+  түлхүүрийг `<redacted>` болгоно.
+- **Profile `schema_version`** (Contract #1-д additive) — заавал биш бүхэл тоо,
+  байхгүй бол 1. Энэ build-ийн дэмждэгээс шинэ хувилбар зарласан профайлыг
+  fail-closed татгалзана (хуучин build шинэ профайлыг чимээгүй буруу уншихгүй).
+- **Bridge-ийн гүйцэтгэлийн timeout** — decrypt/encrypt тус бүр wall-clock
+  төсөвтэй (`--timeout`, default 30с). Хугацаа хэтэрвэл Burp extension-ийг
+  түгжихгүйгээр `timeout` ангиллын алдаа буцаана; гацсан Python hook bridge-ийг
+  зогсоохоо больсон.
+- **Дэмжээгүй cipher-ийн ойлгомжтой алдаа** — `aes_decrypt` дэмждэггүй mode дээр
+  `unsupported_cipher` ангиллаар (native: cbc, gcm) hook/эрэлтийн зөвлөмжтэй
+  алдаа өгнө. `relay inspect`-ийн draft нь ажиглагдсан дэмжээгүй cipher-ийг
+  (ж: RSA) AES гэж таамаглахын оронд тодорхой тэмдэглэнэ.
 - **Golden corpus** (`tests/test_golden_corpus.py`): AES-CBC (hex), gzip+CBC,
   AES-GCM nonce-prefix дээр байт-тогтвортой / round-trip регресс.
 - **Community-health файлууд**: `SECURITY.md` (эмзэг байдлыг хувийн сувгаар мэдээлэх),
@@ -40,7 +55,7 @@
 - **Doc-drift тестүүд** (`tests/test_docs_consistency.py`, `tests/test_cli_docs.py`,
   `tests/test_version.py`): тестийн тоо, README-ийн хоёр хэлнии бүлэгийн
   тэнцүү, холбоосын зөв байдал, user-guide-ын CLI тушаалууд болон хувилбарын
-  нэг эх сурвалжийг шалгана. Нийт: **240 тест**.
+  нэг эх сурвалжийг шалгана. Нийт: **258 тест**.
 
 <!-- TODO(mn): the four bullets below are English placeholders written by a
      non-Mongolian speaker. They need an idiomatic Mongolian translation before

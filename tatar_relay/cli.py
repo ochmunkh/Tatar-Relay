@@ -1,4 +1,4 @@
-"""Command-line interface: run · validate · preview · steps · init · inspect.
+"""Command-line interface: run · explain · validate · preview · steps · init · inspect.
 
 The CLI lets you exercise the core with no proxy at all — the fastest way to
 prove a profile works and to run it in CI.
@@ -109,13 +109,85 @@ def _drain_logs(ctx: Context, seen: int) -> int:
     return len(logs)
 
 
+def cmd_explain(args) -> int:
+    """Static, secret-free explanation of a profile's pipeline(s).
+
+    Unlike ``preview`` (which needs a real captured sample and keys), ``explain``
+    reads only the profile: what each channel locates, the ordered transforms
+    with their declared in->out types, any per-header sub-pipelines, and the
+    reseal — so an operator or reviewer can understand a profile without data.
+    """
+    profile = Profile.load(args.profile)
+    print(f"Profile: {profile.name}   (schema v{profile.schema_version})")
+    print(f"Scope:   hosts={profile.scope.hosts}  paths={profile.scope.paths or '(any)'}")
+    if profile.allow_python_hooks:
+        print("Hooks:   Python hooks ENABLED (trusted local profile)")
+    for ch in ("request", "response"):
+        pipe = profile.pipeline(ch)
+        if pipe is None:
+            continue
+        raw = profile.raw.get(ch) or {}
+        print(f"\n[{ch}]")
+        print(f"  locate:    {_describe_locate((raw.get('envelope') or {}).get('locate'))}")
+        print("  transform: (decrypt reads top->bottom; reseal runs them in reverse)")
+        if not pipe.transform:
+            print("    (none)")
+        for i, step in enumerate(pipe.transform, 1):
+            print(f"    {i}. {step.name:<16} {step.in_type.value} -> {step.out_type.value}{_params_summary(step)}")
+        for name, steps in pipe.header_pipes:
+            chain = " -> ".join(s.name for s in steps) or "(none)"
+            print(f"  header[{name}]: {chain}")
+        reseal = raw.get("reseal")
+        if reseal:
+            print(f"  reseal:    {_describe_reseal(reseal)}")
+    return 0
+
+
+_SECRET_PARAMS = {"key", "secret", "passphrase", "password", "token"}
+
+
+def _params_summary(step) -> str:
+    params = {k: v for k, v in step.params.items() if not k.startswith("_")}
+    if not params:
+        return ""
+    parts = []
+    for k, v in params.items():
+        if k in _SECRET_PARAMS and not (isinstance(v, str) and "${" in v):
+            v = "<redacted>"
+        parts.append(f"{k}={v}")
+    return "   { " + ", ".join(parts) + " }"
+
+
+def _describe_locate(locate) -> str:
+    if not locate:
+        return "raw body (whole body)"
+    parts = []
+    for loc in locate:
+        if not isinstance(loc, dict):
+            parts.append(str(loc)); continue
+        kind = loc.get("in", "?")
+        extra = loc.get("field") or loc.get("header") or loc.get("pattern") or loc.get("regex")
+        parts.append(f"{kind}" + (f" {extra!r}" if extra else ""))
+    return "; ".join(parts)
+
+
+def _describe_reseal(reseal) -> str:
+    names = []
+    for r in reseal:
+        if isinstance(r, str):
+            names.append(r)
+        elif isinstance(r, dict) and r:
+            names.append(next(iter(r)))
+    return " -> ".join(names) or "(none)"
+
+
 def cmd_validate(args) -> int:
     try:
         profile = Profile.load(args.profile)
     except RelayError as e:
         print(f"✗ {e}")
         return 1
-    print(f"✓ Profile '{profile.name}' valid")
+    print(f"✓ Profile '{profile.name}' valid  (schema v{profile.schema_version})")
     for ch, pipe in profile.pipelines.items():
         chain = " → ".join(s.name for s in pipe.transform) or "(none)"
         print(f"✓ {ch} pipeline: {chain} (type check passed)")
@@ -298,7 +370,8 @@ def cmd_bridge(args) -> int:
         default_vars[name.strip()] = val.strip()
     import os
     token = args.token or os.environ.get("TATAR_RELAY_TOKEN") or None
-    svc = BridgeService(default_vars=default_vars, token=token)
+    svc = BridgeService(default_vars=default_vars, token=token,
+                        timeout=args.timeout)
     for path in args.profile:
         svc.add_profile(Profile.load(path))
     print(f"profiles: {list(svc.profiles)}  default_vars: {list(default_vars)}"
@@ -401,6 +474,9 @@ def build_parser() -> argparse.ArgumentParser:
     pv.add_argument("profile"); pv.add_argument("--input", "-i", required=True)
     common(pv); pv.set_defaults(func=cmd_preview)
 
+    ex = sub.add_parser("explain", help="static, secret-free view of a profile's pipeline")
+    ex.add_argument("profile"); ex.set_defaults(func=cmd_explain)
+
     v = sub.add_parser("validate", help="validate a profile (+ optional round-trip)")
     v.add_argument("profile"); v.add_argument("--sample", help="plaintext JSON file for round-trip")
     common(v); v.set_defaults(func=cmd_validate)
@@ -450,6 +526,10 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--observe-file", default="observations.jsonl", dest="observe_file",
                    help="JSONL file for crypto observations from the JS observer "
                         "(default: observations.jsonl)")
+    b.add_argument("--timeout", type=float, default=30.0,
+                   help="per-request execution budget in seconds; a decrypt/"
+                        "encrypt that overruns fails closed (0 disables; "
+                        "default: 30)")
     b.set_defaults(func=cmd_bridge)
 
     cap = sub.add_parser("capture",

@@ -33,7 +33,41 @@ import base64
 import hmac
 import json
 import secrets
+import threading
 from typing import Dict, Optional
+
+
+# Default per-request execution budget for the bridge (seconds). A decrypt or
+# encrypt that exceeds it returns a fail-closed ``timeout`` error instead of
+# hanging the Burp extension; a runaway Python hook can no longer wedge the
+# bridge. 0/None disables the guard.
+DEFAULT_TIMEOUT = 30.0
+
+
+def _call_with_timeout(fn, timeout):
+    """Run ``fn()`` with a wall-clock budget. Raises TimeoutError if exceeded.
+
+    The worker is a daemon thread: Python cannot forcibly kill it, so on a
+    timeout we return control to the caller (which fails closed) and let the
+    stuck thread die with the process. This keeps the transport responsive on
+    both POSIX and Windows, where signal-based timeouts are not available.
+    """
+    box = {}
+
+    def run():
+        try:
+            box["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001 - re-raised in caller
+            box["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        raise TimeoutError(f"operation exceeded {timeout:g}s budget")
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 from .context import Context, HttpMessage
 from .engine import Engine
@@ -45,13 +79,16 @@ from .variables import coerce_key
 class BridgeService:
     def __init__(self, profiles: Dict[str, Profile] | None = None,
                  default_vars: Dict[str, str] | None = None,
-                 token: str | None = None):
+                 token: str | None = None,
+                 timeout: float | None = DEFAULT_TIMEOUT):
         self.profiles: Dict[str, Profile] = profiles or {}
         # Optional shared-secret. When set, the HTTP transport requires a
         # matching X-Relay-Token header. Default None -> no auth (unchanged
         # behavior). The JSON-RPC message contract (#5) is untouched: auth is
         # a transport concern, checked before handle().
         self.token: str | None = token or None
+        # Per-request execution budget (seconds); see DEFAULT_TIMEOUT.
+        self.timeout: float | None = timeout
         # default vars (name -> hex) applied to every flow; message "vars" override.
         # v0.2: the operator supplies the session key here; live extraction is v0.3.
         self.default_vars: Dict[str, str] = default_vars or {}
@@ -93,6 +130,22 @@ class BridgeService:
             return {"ok": False,
                     "error": {"category": getattr(e, "category", "internal"),
                               "message": str(e)}}
+
+    def handle_timed(self, msg: dict, timeout: float | None = None) -> dict:
+        """Like ``handle`` but bounded by a wall-clock budget (fail-closed).
+
+        A decrypt/encrypt that overruns returns a structured ``timeout`` error
+        rather than blocking the transport. ``timeout`` overrides the service
+        default for this call; 0/None disables the guard.
+        """
+        budget = self.timeout if timeout is None else timeout
+        if not budget or budget <= 0:
+            return self.handle(msg)
+        try:
+            return _call_with_timeout(lambda: self.handle(msg), budget)
+        except TimeoutError as e:
+            return {"ok": False,
+                    "error": {"category": "timeout", "message": str(e)}}
 
     def _profile(self, name: str | None) -> Profile:
         if not name:
@@ -196,7 +249,7 @@ def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799
             length = int(self.headers.get("Content-Length", 0))
             try:
                 msg = json.loads(self.rfile.read(length) or b"{}")
-                resp = service.handle(msg)
+                resp = service.handle_timed(msg)
                 code = 200
             except Exception as e:  # noqa: BLE001
                 resp, code = {"ok": False, "error": {"category": "internal", "message": str(e)}}, 400

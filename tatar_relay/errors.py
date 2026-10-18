@@ -25,6 +25,8 @@ CATEGORIES = (
     "profile_invalid",   # the profile itself failed validation
     "hook_error",        # a user Python hook raised
     "config_error",      # a step was mis-configured in the profile
+    "unsupported_cipher",# a cipher/mode the engine has no native step for
+    "timeout",           # a decrypt/encrypt exceeded the bridge's time budget
     "internal",          # anything unclassified
 )
 

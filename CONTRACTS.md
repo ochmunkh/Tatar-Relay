@@ -9,8 +9,10 @@ are minor; renames/removals are breaking.
 optional `paths`), `vars` (extraction + `live`), and `request`/`response`
 pipelines, each `{ envelope, transform, reseal }`. `envelope` may also carry
 `headers[]` — per-header sub-pipelines for the full symmetric envelope class
-(additive in v0.5). See `examples/acme-bank-mobile.yaml` and
-`examples/full-envelope.yaml`.
+(additive in v0.5). An optional `schema_version` (integer; absent means 1) is
+checked fail-closed: a profile declaring a newer generation than this build
+supports is refused rather than mis-read (additive). See
+`examples/acme-bank-mobile.yaml` and `examples/full-envelope.yaml`.
 
 ## #2 — Context API
 `tatar_relay/context.py`. The object every step and hook receives:
@@ -31,7 +33,8 @@ load-time type checking. Register with `@register("name")`.
 channel, detail)`. Categories are a closed vocabulary (`padding`,
 `tag_mismatch`, `wrong_key_size`, `signature_invalid`, `type_mismatch`,
 `locate_failed`, `decode_failed`, `extraction_failed`, `scope_violation`,
-`profile_invalid`, `hook_error`, `config_error`, `internal`). `decode_failed`
+`profile_invalid`, `hook_error`, `config_error`, `unsupported_cipher`,
+`timeout`, `internal`). `decode_failed`
 is additive and separates "this one message is not shaped the way the
 profile expects" (ignore the flow) from `config_error`, "your profile is wrong"
 (fix the YAML). `ScopeViolation` and `ProfileError` carry the matching category

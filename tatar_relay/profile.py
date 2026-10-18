@@ -19,6 +19,12 @@ from .errors import DecryptError, ProfileError, ScopeViolation
 from .hooks import load_hook
 from .variables import VarStore, json_path_get
 
+# Profile schema generation this build understands (Frozen Contract #1).
+# A profile may declare ``schema_version:``; absent means 1 (backward-compatible).
+# Bumping this is a MINOR change; a profile that declares a HIGHER number is
+# refused fail-closed so an old build never silently mis-reads a newer profile.
+SCHEMA_VERSION = 1
+
 
 @dataclass
 class Scope:
@@ -38,6 +44,7 @@ class Profile:
         self.base_dir = base_dir
         self.name: str = data.get("name", "unnamed")
         self.raw = data
+        self.schema_version: int = self._read_schema_version(data)
         self.allow_python_hooks: bool = bool(
             (data.get("security") or {}).get("allow_python_hooks", False)
         )
@@ -64,6 +71,21 @@ class Profile:
                 self.pipelines[channel] = ChannelPipeline(data[channel], self.base_dir)
         if "request" not in self.pipelines:
             raise ProfileError(f"profile '{self.name}': a 'request' pipeline is required")
+
+    @staticmethod
+    def _read_schema_version(data: dict) -> int:
+        raw = data.get("schema_version", SCHEMA_VERSION)
+        try:
+            ver = int(raw)
+        except (TypeError, ValueError):
+            raise ProfileError(f"schema_version must be an integer, got {raw!r}")
+        if ver < 1:
+            raise ProfileError(f"schema_version must be >= 1, got {ver}")
+        if ver > SCHEMA_VERSION:
+            raise ProfileError(
+                f"profile schema_version {ver} is newer than this build "
+                f"supports (max {SCHEMA_VERSION}); upgrade tatar-relay")
+        return ver
 
     # -- loading ----------------------------------------------------------
     @classmethod

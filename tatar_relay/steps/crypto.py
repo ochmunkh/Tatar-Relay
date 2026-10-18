@@ -29,7 +29,13 @@ class AesDecrypt(Step):
     def configure(self) -> None:
         self.mode = self.params.get("mode", "cbc").lower()
         if self.mode not in ("cbc", "gcm"):
-            raise DecryptError(category="config_error", message=f"aes: bad mode {self.mode}")
+            raise DecryptError(
+                category="unsupported_cipher",
+                message=(f"aes_decrypt: unsupported mode {self.mode!r} "
+                         f"(native modes: cbc, gcm). For another AES mode or a "
+                         f"different cipher, use a Python hook "
+                         f"(security.allow_python_hooks: true) or open an issue "
+                         f"to request native support."))
         iv = self.params.get("iv", {})
         self.iv_source = (iv or {}).get("source", "prefix")
         self.iv_len = int((iv or {}).get("length", 16 if self.mode == "cbc" else 12))

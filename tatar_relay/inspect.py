@@ -299,6 +299,12 @@ def draft_profile(data: bytes, name: str = "target",
         summary = f"{picked.get('algorithm')} {picked.get('ivLen')}B nonce (from observation)"
         lines.append(f"    # cipher from JS observation: {summary}")
         lines.append(cipher_line)
+    elif picked is not None:
+        algo = picked.get("algorithm")
+        lines.append(f"    # UNSUPPORTED cipher observed: {algo!r} — Tatar Relay has no")
+        lines.append("    # native step for it. Use a Python hook (set")
+        lines.append("    # security.allow_python_hooks: true) or request native support.")
+        lines.append('    # - python: { file: "hooks/REPLACE.py", forward: decrypt, backward: encrypt }')
     else:
         if fp.cipher_guess == "aead":
             lines.append('    # REVIEW: AES-GCM or ChaCha20? (observation would confirm)')
