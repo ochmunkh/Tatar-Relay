@@ -21,6 +21,7 @@ CASES = [
     ("golden-gzip-cbc", False),  # gzip header carries mtime -> encrypt not byte-stable (decrypt + round-trip only)
     ("golden-hex-cbc", True),    # hex + AES-CBC (fixed IV)
     ("golden-gcm", False),       # base64 + AES-GCM nonce-prefix (random nonce on encrypt)
+    ("golden-deflate-cbc", False),  # base64 + AES-CBC + DEFLATE (inflate); zlib bytes vary -> decrypt + round-trip only
 ]
 
 

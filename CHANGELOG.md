@@ -6,9 +6,18 @@
 
 ---
 
-## [Unreleased]
+## [0.7.0] — 2026-11-10 · Declarative key derivation, inflate codec
 
 ### Нэмэгдсэн зүйлс
+- **Declarative key derivation** — `vars:`-д `from: hkdf` ба `from: ecdh` эх
+  сурвалж нэмэв (`tatar_relay/derive.py`). ECDH shared secret → HKDF → AES key
+  гэх түгээмэл handshake-ийг **Python hook-гүйгээр** declarative задлах боломжтой
+  болов. HKDF нь RFC 5869 вектороор, ECDH (x25519/p256) round-trip-аар тест хийсэн.
+  Деривацийн var нь live тул `--var`/captured secret-ийг хардаг; `allow_python_hooks=false`
+  профайлд ажиллана (hook биш).
+- **`inflate` codec** — zlib / raw DEFLATE (`Content-Encoding: deflate`), урвуутай,
+  `gunzip` шиг decompression-bomb-ын эсрэг output cap-тай.
+- **Golden corpus**-д DEFLATE+AES-CBC case нэмэв (`golden-deflate-cbc`).
 - **`relay explain`** — профайлын pipeline-ийг нууц мэдээлэлгүйгээр статикаар
   тайлбарлана (envelope locate, step бүрийн in→out type, header дэд-pipeline,
   reseal). `preview`-ээс ялгаатай нь бодит дата/түлхүүр шаардахгүй; литерал
@@ -55,7 +64,7 @@
 - **Doc-drift тестүүд** (`tests/test_docs_consistency.py`, `tests/test_cli_docs.py`,
   `tests/test_version.py`): тестийн тоо, README-ийн хоёр хэлнии бүлэгийн
   тэнцүү, холбоосын зөв байдал, user-guide-ын CLI тушаалууд болон хувилбарын
-  нэг эх сурвалжийг шалгана. Нийт: **258 тест**.
+  нэг эх сурвалжийг шалгана. Нийт: **272 тест**.
 
 <!-- TODO(mn): the four bullets below are English placeholders written by a
      non-Mongolian speaker. They need an idiomatic Mongolian translation before

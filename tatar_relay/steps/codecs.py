@@ -115,6 +115,59 @@ class Gunzip(Step):
         return gzip.compress(_as_bytes(data))
 
 
+@register("inflate")
+class Inflate(Step):
+    """DEFLATE / zlib decompression (``Content-Encoding: deflate``), reversible.
+
+    Complements ``gunzip`` for apps that zlib- or raw-DEFLATE their bodies.
+    ``raw: true`` uses headerless DEFLATE (RFC 1951); default is zlib-wrapped
+    (RFC 1950). Output is capped like ``gunzip`` so a decompression bomb cannot
+    exhaust memory.
+
+        transform:
+          - inflate: { raw: false }   # zlib-wrapped (default); raw: true = RFC1951
+    """
+
+    in_type = DataType.BYTES
+    out_type = DataType.BYTES
+
+    def configure(self) -> None:
+        self.max_size = int(self.params.get("max_size", _DEFAULT_MAX_OUTPUT))
+        self.raw = bool(self.params.get("raw", False))
+
+    def forward(self, data, ctx: Context) -> bytes:
+        raw = _as_bytes(data)
+        wbits = -zlib.MAX_WBITS if self.raw else zlib.MAX_WBITS
+        d = zlib.decompressobj(wbits)
+        out = bytearray()
+        pending = raw
+        try:
+            while pending or not d.eof:
+                chunk = d.decompress(pending, 1 << 20)   # <=1 MiB per call
+                pending = d.unconsumed_tail
+                if not chunk and not pending:
+                    break
+                out += chunk
+                if self.max_size and len(out) > self.max_size:
+                    raise DecryptError(
+                        category="decode_failed",
+                        message=f"inflate: output exceeds cap ({self.max_size} bytes) "
+                                f"— possible decompression bomb",
+                        step=self.name, direction="forward")
+            out += d.flush()
+        except DecryptError:
+            raise
+        except (zlib.error, OSError) as e:
+            raise DecryptError(category="decode_failed", message=f"inflate: {e}",
+                               step=self.name, direction="forward")
+        return bytes(out)
+
+    def backward(self, data, ctx: Context) -> bytes:
+        wbits = -zlib.MAX_WBITS if self.raw else zlib.MAX_WBITS
+        c = zlib.compressobj(6, zlib.DEFLATED, wbits)
+        return c.compress(_as_bytes(data)) + c.flush()
+
+
 def _dec_seg(s: str, enc: str) -> bytes:
     if enc == "hex":
         return bytes.fromhex(s)

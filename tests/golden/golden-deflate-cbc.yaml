@@ -1,0 +1,9 @@
+name: golden-deflate-cbc
+scope: { hosts: [ "api.example.com" ] }
+request:
+  envelope: { locate: [ { in: raw } ] }
+  transform:
+    - base64_decode
+    - aes_decrypt: { mode: cbc, key: "${session_key}", iv: { source: value, value: "${iv}" } }
+    - inflate
+    - as_json

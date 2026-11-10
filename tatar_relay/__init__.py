@@ -13,7 +13,7 @@ from .variables import VarStore
 # THE single source of truth for the version. pyproject.toml reads this
 # attribute (dynamic version) and cli.py's --version formats it, so a release
 # bumps exactly one literal. tests/test_version.py pins it to CHANGELOG.md.
-__version__ = "0.6.1"
+__version__ = "0.7.0"
 
 __all__ = [
     "Context", "HttpMessage", "Engine", "ChannelPipeline",

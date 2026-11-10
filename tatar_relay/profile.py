@@ -151,6 +151,11 @@ class Profile:
                     vs.set_live(name, lambda fn=fn, ctx=ctx: fn(ctx))
                 else:
                     vs.set(name, fn(ctx))
+            elif src in ("hkdf", "ecdh"):
+                # Declarative key derivation (no Python hook). LIVE so it sees
+                # --var / captured secrets injected after the varstore is built.
+                from .derive import DERIVERS
+                vs.set_live(name, lambda spec=spec, vs=vs, src=src: DERIVERS[src](spec, vs))
             # 'extraction' vars are populated by feed() when the matching
             # handshake message is seen.
         return vs
