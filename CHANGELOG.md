@@ -8,6 +8,32 @@
 
 ## [Unreleased]
 
+### Burp extension (Java)
+- **Тайлалт UI thread-ээс гадна (async).** Editor таб bridge дээр царцахаа
+  больсон: `decrypting...` харуулаад үр дүн ирэхэд дүүргэнэ; хуучирсан хариу
+  (хэрэглэгч өөр мессеж дарсан) хаягдана. Нийтлэг daemon pool, extension unload
+  үед цэвэрхэн зогсоно.
+- **Intruder / Repeater дээр шифрлэгдсэн API-г fuzz хийх.** Баруун товшоод
+  "send plaintext to Intruder/Repeater" — тайлсан JSON-г template болгож
+  илгээнэ; HTTP handler нь илгээхийн өмнө body-г encrypt + reseal хийж,
+  `X-Tatar-Relay-Template` header-ийг устгана (token target руу очихгүй).
+  Response бүр тайлагдаж Comment баганад preview гарна. Fail-closed: seal
+  амжилтгүй бол plaintext илгээхгүй, body хасаж улаанаар тэмдэглэнэ.
+- **Binary body-г гажуудуулахгүй** — editor нь body-г яг байтаар нь дамжуулдаг
+  болсон (өмнө нь UTF-8 string-ээр хөрвүүлж, түүхий ciphertext эвдэрч болзошгүй
+  байсан). Pretty JSON дээр HTML escaping унтраасан тул `<script>` зэрэг payload
+  `\u003c` болж харагдахгүй.
+- Шинэ `AsyncDecrypt`, `Seal`, `RelayHttpHandler`, `RelayContextMenu`; `BridgeClient`
+  timeout тохируулж болдог (`-Dtatar.timeout`). Шинэ `LogicTest` (17 шалгалт,
+  Burp-гүй), `ExtensionLoadTest` шинэ бүртгэлүүдийг шалгана — CI-д ажиллана.
+
+### Core
+- **Bridge-ийн encrypt талд scope шалгалт.** `encrypt` нь optional `host`/`path`
+  авч, нэг `ctx_token`-оор олон удаа seal хийхэд (Intruder) профайлын fail-closed
+  scope-ыг дахин шалгана (Contract #5-д additive). `tests/test_bridge_seal.py`.
+- Нийт: **311 тест** (Python) + Java LogicTest/ExtensionLoadTest.
+
+
 ### Аюулгүй байдал (tool-ын өөрийн)
 - **Bridge-ийг сүлжээнд token-гүй нээхгүй** — loopback бус хаяг дээр `--token`
   байхгүй бол асахаас татгалзана (fail-closed). Ингэснээр LAN дээрх хэн нэгэн
@@ -41,7 +67,7 @@
   байдаг `tests/test_*_local.py` (операторын хувийн тест) тоонд ордог байсан тул
   10-р сарын 18-аас хойш CI-ийн docs шалгалт 1-ээр зөрж улаан болж байв;
   одоо хоёр тал ижил тоолно.
-- Нийт: **308 тест**.
+- Нийт: **311 тест**.
 
 ## [0.7.0] — 2026-11-10 · Declarative key derivation, inflate codec
 

@@ -12,12 +12,16 @@ import java.awt.Component;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+import static relay.RelayHttpRequestEditor.hostOf;
+import static relay.RelayHttpRequestEditor.pathOf;
+import static relay.RelayHttpRequestEditor.utf8;
+
 /**
  * The "Tatar Relay" tab shown on the RESPONSE side of message editors
  * (Repeater, Proxy history, etc.).
  *
  * setRequestResponse: decrypt the response body via the bridge ("response"
- *                     channel) and show plaintext JSON.
+ *                     channel) in the background and show plaintext JSON.
  * getResponse:        re-encrypt the (possibly edited) plaintext and return a
  *                     response with the new wire body.
  * On any bridge/pipeline failure the original response is passed through and a
@@ -32,9 +36,10 @@ public class RelayHttpResponseEditor implements ExtensionProvidedHttpResponseEdi
     private final BridgeClient bridge;
     private final String profile;
     private final RawEditor editor;
+    private final AsyncDecrypt async = new AsyncDecrypt();
 
-    private HttpRequestResponse current;
-    private String ctxToken;
+    private volatile HttpRequestResponse current;
+    private volatile String ctxToken;
 
     public RelayHttpResponseEditor(MontoyaApi api, BridgeClient bridge, String profile) {
         this.api = api;
@@ -54,40 +59,41 @@ public class RelayHttpResponseEditor implements ExtensionProvidedHttpResponseEdi
     public void setRequestResponse(HttpRequestResponse requestResponse) {
         this.current = requestResponse;
         this.ctxToken = null;
+        editor.setEditable(false);
+        editor.setContents(utf8("// Tatar Relay: decrypting..."));
 
-        String body = requestResponse.response().bodyToString();
-        String wireB64 = Base64.getEncoder()
-                .encodeToString(body.getBytes(StandardCharsets.UTF_8));
+        final byte[] wire = requestResponse.response().body().getBytes();
+        final String host = hostOf(requestResponse);
+        final String path = pathOf(requestResponse);
 
-        BridgeClient.DecryptResult r = bridge.decrypt(
-                profile, "response", wireB64,
-                hostOf(requestResponse), pathOf(requestResponse));
-        if (r.error == null) {
-            this.ctxToken = r.ctxToken;
-            editor.setEditable(true);
-            editor.setContents(ByteArray.byteArray(r.plaintextText));
-        } else {
-            editor.setEditable(false);
-            editor.setContents(ByteArray.byteArray(
-                    "// Tatar Relay could not decrypt this response:\n// " + r.error
-                            + "\n// (does the profile have a 'response' pipeline and the key set?)"));
-        }
+        async.submit(() -> bridge.decryptBytes(profile, "response", wire, host, path), r -> {
+            if (r.error == null) {
+                ctxToken = r.ctxToken;
+                editor.setContents(utf8(r.plaintextText));
+                editor.setEditable(true);
+            } else {
+                editor.setContents(utf8(
+                        "// Tatar Relay could not decrypt this response:\n// " + r.error
+                                + "\n// (does the profile have a 'response' pipeline and the key set?)"));
+            }
+        });
     }
 
     @Override
     public HttpResponse getResponse() {
-        // No decrypt happened, or the user didn't edit — return the original bytes.
-        if (ctxToken == null || !editor.isModified()) {
-            return current.response();
+        String token = ctxToken;
+        HttpRequestResponse rr = current;
+        if (token == null || !editor.isModified()) {
+            return rr.response();
         }
         try {
-            String edited = editor.getContents().toString();
-            String wireB64 = bridge.encrypt(ctxToken, edited);
+            String edited = new String(editor.getContents().getBytes(), StandardCharsets.UTF_8);
+            String wireB64 = bridge.encrypt(token, edited);
             byte[] wire = Base64.getDecoder().decode(wireB64);
-            return current.response().withBody(ByteArray.byteArray(wire));
+            return rr.response().withBody(ByteArray.byteArray(wire));
         } catch (Exception e) {
             api.logging().logToError("[tatar-relay] response re-encrypt failed, sending original: " + e.getMessage());
-            return current.response();
+            return rr.response();
         }
     }
 
@@ -110,24 +116,4 @@ public class RelayHttpResponseEditor implements ExtensionProvidedHttpResponseEdi
     public Selection selectedData() {
         return editor.selection().isPresent() ? editor.selection().get() : null;
     }
-
-    /** Host of the flow, or null when Burp has not attached a service to it.
-     *  Best effort on purpose: a null here means "no host supplied", which the
-     *  core treats as the previous, unchecked behaviour rather than a refusal. */
-    private static String hostOf(HttpRequestResponse rr) {
-        try {
-            return rr.request().httpService().host();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static String pathOf(HttpRequestResponse rr) {
-        try {
-            return rr.request().path();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
 }

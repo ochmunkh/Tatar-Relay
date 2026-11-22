@@ -291,6 +291,13 @@ class BridgeService:
             raise DecryptError(category="config_error", message="unknown or expired ctx_token")
         self._ctx.move_to_end(token)           # recently used -> keep longer
         ctx, eng, channel, orig = self._ctx[token]
+        # A token can be reused to seal many plaintexts (the Burp Intruder
+        # workflow), possibly after the request was re-pointed. When the
+        # frontend says where the sealed message is going, hold it to the same
+        # fail-closed scope as decrypt.
+        host = msg.get("host") or ""
+        if host:
+            eng.profile.authorize(host, msg.get("path") or None)
         wire = eng.encrypt(channel, msg["plaintext"], ctx)
         return {"ok": True, "wire": base64.b64encode(wire).decode("ascii"),
                 "diff": {"changed_bytes": _byte_diff(orig, wire), "out_len": len(wire)}}

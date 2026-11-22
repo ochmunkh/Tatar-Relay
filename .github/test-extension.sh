@@ -28,4 +28,5 @@ rm -rf test-out/*
 javac --release 17 -cp "$CP" -d test-out \
   $(find src/main/java src/test/java -name '*.java')
 
+java -cp "test-out:$CP" relay.LogicTest
 java -cp "test-out:$CP" relay.ExtensionLoadTest

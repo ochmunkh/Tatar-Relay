@@ -53,7 +53,9 @@ never crashes.
 // Core → Burp
 {"ok":true,"plaintext":<json>,"ctx_token":"t-9f"}
 // Burp → Core
-{"method":"encrypt","channel":"request","plaintext":<json>,"ctx_token":"t-9f"}
+{"method":"encrypt","channel":"request","plaintext":<json>,"ctx_token":"t-9f",
+ "host":"api.example.com","path":"/v2/pay"}   // host/path optional, scope-checked
+// a ctx_token may be reused to seal many plaintexts (Burp Intruder workflow)
 // Core → Burp
 {"ok":true,"wire":"<base64>","diff":{"changed_bytes":14}}
 ```

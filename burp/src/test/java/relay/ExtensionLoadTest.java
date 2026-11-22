@@ -54,6 +54,12 @@ public final class ExtensionLoadTest {
                 "a request editor tab is registered");
         expect("api.userInterface().registerHttpResponseEditorProvider",
                 "a response editor tab is registered");
+        expect("api.userInterface().registerContextMenuItemsProvider",
+                "a context menu is registered");
+        expect("api.http().registerHttpHandler",
+                "an HTTP handler is registered (seal on send)");
+        expect("api.extension().registerUnloadingHandler",
+                "an unloading handler is registered");
         expect("api.logging().logToOutput", "it reports the bridge/profile it will use");
 
         // The defaults matter: a user who sets neither property gets the local

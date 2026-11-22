@@ -81,14 +81,37 @@ response body through the profile's `response` pipeline, so you can read (and
 edit) decrypted responses without leaving Burp. A profile with no `response`
 pipeline just shows a reason in the tab.
 
+Decryption runs **off the UI thread**, so Burp never freezes while the bridge
+works; the tab shows `decrypting...` and fills in when the result arrives. If you
+click another message first, the slow answer is discarded rather than shown on
+the wrong one.
+
+## 5. Fuzz an encrypted API with Intruder
+
+Right-click an encrypted request → **Tatar Relay: send plaintext to Intruder**
+(or **…to Repeater**). The extension decrypts it and sends a **plaintext
+template** — its body is the decrypted JSON, carrying a one-time
+`X-Tatar-Relay-Template` header.
+
+Mark your payload positions **in the plaintext**, then run Intruder normally.
+Just before each request leaves Burp, the extension encrypts and reseals the
+body with the original decrypt's context and removes the header, so the target
+only ever sees correctly sealed ciphertext. The response of each attempt is
+decrypted and a one-line preview is written to the **Comment** column.
+
+Fail-closed: if a reseal fails (e.g. the flow left the profile's scope) the
+plaintext is **not** sent — the body is withheld and the attempt is highlighted
+red with the reason.
+
 ## Notes / roadmap
 
-- v0.2 shows a raw plaintext editor. Live Preview (per-step view) and a byte-diff
-  panel are next.
+- **Async decrypt — done.** The Burp UI no longer blocks on the bridge.
+- **Intruder / Repeater plaintext fuzzing — done** (see §5).
 - Response editor tab — **done** (decrypt/edit responses in Burp).
-- Intruder support and in-Burp key extraction come later.
+- Live Preview (per-step view) and a byte-diff panel are next; in-Burp key
+  extraction comes later.
 - The extension never sends a broken request: any bridge/pipeline error falls
-  back to the original bytes and logs a reason.
+  back to the original bytes (or withholds a failed seal) and logs a reason.
 
 ---
 
@@ -169,11 +192,31 @@ pipeline-аар response body-г тайлдаг тул Burp-ээс гаралг�
 уншиж (мөн засварлаж) болно. `response` pipeline-гүй профайл дээр таб нь зөвхөн
 шалтгааныг харуулна.
 
+Тайлалт нь **UI thread-ээс гадна** ажилладаг тул bridge ажиллаж байх зуур Burp
+царцахгүй; таб эхлээд `decrypting...` гэж харуулаад үр дүн ирэхэд дүүргэнэ. Өөр
+мессеж эхэлж дарвал удаан хариу нь буруу мессеж дээр харагдахын оронд хаягдана.
+
+### 5. Intruder-ээр шифрлэгдсэн API-г fuzz хийх
+
+Шифрлэгдсэн request дээр баруун товшоод → **Tatar Relay: send plaintext to
+Intruder** (эсвэл **…to Repeater**). Extension түүнийг тайлж, **plaintext
+template** илгээнэ — body нь тайлсан JSON, нэг удаагийн `X-Tatar-Relay-Template`
+header-тэй.
+
+Payload байрлалаа **plaintext дотор** тэмдэглээд Intruder-ээ энгийнээр ажиллуул.
+Request бүр Burp-ээс гарахын өмнөхөн extension нь body-г анхны тайлалтын
+контекстоор encrypt + reseal хийж, header-ийг устгана — ингэснээр target зөвхөн
+зөв битүүмжилсэн ciphertext хүлээж авна. Оролдлого бүрийн response тайлагдаж,
+нэг мөрийн preview нь **Comment** баганад бичигдэнэ.
+
+Fail-closed: reseal амжилтгүй бол (ж: scope-оос гарсан) plaintext **илгээгдэхгүй**
+— body хасагдаж, оролдлого улаанаар тэмдэглэгдэж шалтгааныг харуулна.
+
 ### Тэмдэглэл / замын зураг
 
-- v0.2 нь түүхий plaintext editor харуулна. Live Preview (алхам тус бүрийн
-  харагдац) ба byte-diff самбар дараагийнх.
+- **Async тайлалт — хийгдсэн.** Burp UI bridge дээр царцахаа больсон.
+- **Intruder / Repeater plaintext fuzzing — хийгдсэн** (§5).
 - Response editor таб — **хийгдсэн** (Burp дотор response-ыг тайлж/засварлах).
-- Intruder дэмжлэг ба Burp дотроос key салгах нь дараа нь.
-- Extension нь эвдэрсэн request хэзээ ч илгээхгүй: bridge/pipeline-ийн ямар ч
-  алдаа гарвал анхны байт руу буцаж, шалтгааныг бичнэ.
+- Live Preview ба byte-diff самбар дараагийнх; Burp дотроос key салгах нь дараа нь.
+- Extension нь эвдэрсэн request хэзээ ч илгээхгүй: ямар ч алдаа гарвал анхны байт
+  руу буцаж (эсвэл амжилтгүй seal-ийг хориглож) шалтгааныг бичнэ.
