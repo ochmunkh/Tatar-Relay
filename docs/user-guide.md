@@ -407,6 +407,12 @@ export TATAR_RELAY_TOKEN=<secret>
 relay bridge myprofile.yaml
 ```
 
+Bridge-ийг loopback-аас өөр хаяг (`--host 0.0.0.0` г.м) дээр асаахад токен
+**заавал** — токенгүй бол асахаас татгалзана (fail-closed). Capture sidecar нь
+bridge сүлжээнд нээлттэй үед ч үргэлж `127.0.0.1`-д үлдэнэ. Мөн браузераас ирсэн
+(`Origin` header-тэй) болон loopback бус `Host`-той хүсэлтийг bridge татгалзана
+(CSRF / DNS rebinding-ийн эсрэг), body 16 MiB-ээс хэтэрвэл `413`.
+
 Токен идэвхжсэн үед bridge нь `X-Relay-Token` header-гүй, эсвэл буруу токентой
 хүсэлтийг `401` буцаана (харьцуулалт нь constant-time). Burp extension нь мөн
 токеныг илгээхийн тулд Java-д `-Dtatar.relay.token=<secret>` эсвэл

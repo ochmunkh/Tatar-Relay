@@ -112,6 +112,23 @@ pull request, in three jobs:
 | `test` | a 3.9 + 3.13 matrix: install with the `dev` extra, then `pytest -q`. `fail-fast` is off so one interpreter breaking does not hide the other. |
 | `build-jar` | compiles the Burp extension with `.github/build-jar.sh` (JDK 17, no Gradle). [`release.yml`](.github/workflows/release.yml) runs the same script on a `v*` tag, so this is what keeps releases buildable. |
 
+[`.github/workflows/security.yml`](.github/workflows/security.yml) runs alongside
+it (and weekly): the repository policy guard, a gitleaks secret scan of the full
+history, `pip-audit`, and CodeQL. All actions are pinned to commit SHAs; when
+updating one, pin the new SHA and keep the version comment.
+
+### Repository policy
+
+The public tree, commit messages and commit authors must never contain specific
+organisation or product names, a company name, or AI-tool attribution, and
+automated (bot) commits must not land — they would appear as contributors.
+Describe cryptography by **algorithm name only**, and use synthetic data
+(`api.example.com`) in examples and tests.
+[`tools/policy_check.py`](tools/policy_check.py) enforces this in CI and in
+`pytest`; it stores the disallowed tokens as SHA-256 digests only, so it never
+publishes them. Run `python tools/policy_check.py` (and `... commits`) before
+pushing.
+
 ## Scope of a change
 
 - Python hooks are arbitrary code execution, so untrusted profiles stay
@@ -183,7 +200,17 @@ pytest-ийн бодитоор цуглуулсан тоотой тулгада�
 
 `ci.yml` нь push ба pull request бүр дээр гурван job ажиллуулна: `lint`
 (ruff + README parity), `test` (3.9/3.13 matrix дээр pytest), `build-jar` (Burp
-extension-ыг compile хийж, mock ачаалалтын тест ажиллуулна).
+extension-ыг compile хийж, mock ачаалалтын тест ажиллуулна). `security.yml` нь
+(мөн долоо хоног бүр) policy guard, gitleaks, `pip-audit`, CodeQL ажиллуулна;
+action бүр commit SHA-гаар pin хийгдсэн.
+
+### Repo-гийн бодлого
+
+Public tree, commit message, commit author-д тодорхой байгууллага/бүтээгдэхүүний
+нэр, компанийн нэр, AI хэрэгслийн attribution байж болохгүй; bot commit оруулахгүй.
+Криптог **зөвхөн алгоритмын нэрээр** бичнэ, жишээ/тестэд синтетик өгөгдөл.
+`tools/policy_check.py` үүнийг CI болон pytest-д шалгана (нэрсийг зөвхөн SHA-256
+hash-аар хадгална). Push хийхээс өмнө `python tools/policy_check.py` ажиллуул.
 
 ### Өөрчлөлтийн хүрээ
 

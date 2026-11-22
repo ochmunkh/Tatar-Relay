@@ -1,0 +1,79 @@
+name: Security
+
+# The tool's own supply-chain and repository hygiene, separate from ci.yml so a
+# failure here is easy to read. Actions are pinned to commit SHAs (a moved tag
+# cannot change what runs); downloaded binaries are checksum-verified.
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * 1"   # weekly: new advisories appear without new commits
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Repository policy (names, attribution, bot authors)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0          # the commit check reads the whole history
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Tracked files
+        run: python tools/policy_check.py
+      - name: Commit messages and authors
+        run: python tools/policy_check.py commits
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.28.0"
+      GITLEAKS_SHA256: "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks (checksum-verified)
+        run: |
+          set -euo pipefail
+          curl -sSfL -o gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+      - name: Scan full history
+        run: ./gitleaks git . --config .gitleaks.toml --redact --no-banner --exit-code 1
+
+  dependencies:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      # Audits the project's resolved runtime dependencies against the PyPA/OSV
+      # advisory databases. No bot, no automated pull requests.
+      - name: pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pip-audit==2.10.1"
+          pip-audit .
+
+  codeql:
+    name: Static analysis (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: github/codeql-action/init@d2aacf54c2fbc910db8d7ec338fdb54ea48c692d # v3.39.4
+        with:
+          languages: python, java-kotlin
+          build-mode: none
+      - uses: github/codeql-action/analyze@d2aacf54c2fbc910db8d7ec338fdb54ea48c692d # v3.39.4

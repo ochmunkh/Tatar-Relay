@@ -506,7 +506,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     b = sub.add_parser("bridge", help="serve the JSON-RPC bridge for the Burp extension")
     b.add_argument("profile", nargs="+", help="one or more profile.yaml files")
-    b.add_argument("--host", default="127.0.0.1")
+    b.add_argument("--host", default="127.0.0.1",
+                   help="bind address (default: 127.0.0.1). A non-loopback "
+                        "address is refused unless --token is set")
     b.add_argument("--port", type=int, default=8799)
     b.add_argument("--var", action="append", help="default var name=HEX (e.g. session_key=00…)")
     b.add_argument("--token", default=None,

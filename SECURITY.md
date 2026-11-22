@@ -12,8 +12,8 @@ The latest released version receives security fixes. Older tags do not.
 
 | Version | Supported |
 |---------|-----------|
-| 0.6.x   | ✅        |
-| < 0.6   | ❌        |
+| 0.7.x   | ✅        |
+| < 0.7   | ❌        |
 
 ## Reporting a vulnerability
 
@@ -29,6 +29,16 @@ What to expect: an acknowledgement, an assessment of impact and affected
 versions, a fix on a coordinated timeline, and credit in the release notes if
 you want it. Please give a reasonable window to fix before any public
 disclosure.
+
+## Security design
+
+- [THREAT_MODEL.md](THREAT_MODEL.md) — assets, trust boundaries, threats and the
+  control (code + test) that answers each one.
+- [CRYPTO.md](CRYPTO.md) — algorithm inventory, legacy-algorithm rationale and
+  the rules the crypto code follows.
+- Automated checks on every push: secret scan, dependency audit, static
+  analysis, repository policy guard (`.github/workflows/security.yml`). Releases
+  ship a CycloneDX SBOM and signed build provenance.
 
 ## Out of scope
 

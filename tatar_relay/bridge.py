@@ -31,10 +31,12 @@ from __future__ import annotations
 
 import base64
 import hmac
+import ipaddress
 import json
 import secrets
 import threading
-from typing import Dict, Optional
+from collections import OrderedDict
+from typing import Dict, Optional, Tuple
 
 
 # Default per-request execution budget for the bridge (seconds). A decrypt or
@@ -42,6 +44,95 @@ from typing import Dict, Optional
 # hanging the Burp extension; a runaway Python hook can no longer wedge the
 # bridge. 0/None disables the guard.
 DEFAULT_TIMEOUT = 30.0
+
+# Largest JSON-RPC request body the bridge will read. A decrypt request carries
+# one captured message, so 16 MiB is generous; anything bigger is refused (413)
+# before it is read into memory.
+MAX_REQUEST_BYTES = 16 * 1024 * 1024
+
+# decrypt() hands out a ctx_token per flow so a later encrypt() can reseal it.
+# The store is bounded (least-recently-used entries are evicted) so a long
+# session cannot grow it without limit.
+MAX_CTX_ENTRIES = 1024
+
+
+def is_loopback(host: str) -> bool:
+    """True for 127.0.0.0/8, ::1 and the name ``localhost``."""
+    host = (host or "").strip().strip("[]")
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def require_safe_bind(host: str, token: Optional[str]) -> None:
+    """Fail closed: never expose an unauthenticated bridge beyond loopback.
+
+    The bridge decrypts and reseals with whatever keys the operator loaded, so
+    binding it to a LAN-reachable address without a shared token would turn it
+    into a decryption/encryption oracle for anyone on the network.
+    """
+    if not is_loopback(host) and not token:
+        raise RelayError(
+            f"refusing to bind the bridge to non-loopback address {host!r} "
+            f"without a token — set --token / TATAR_RELAY_TOKEN, or bind to "
+            f"127.0.0.1")
+
+
+def capture_bind_host(bridge_host: str) -> str:
+    """Where the key-capture sidecar binds.
+
+    The sidecar's ``/key`` and ``/observe`` are deliberately reachable from the
+    testing browser's page (CORS ``*``), and that browser runs on the operator's
+    own machine — so the sidecar never needs to be reachable from the network.
+    Even when the bridge itself is bound beyond loopback (with a token), the
+    sidecar stays on loopback so nobody on the LAN can inject a key.
+    """
+    return bridge_host if is_loopback(bridge_host) else "127.0.0.1"
+
+
+def _host_only(value: str) -> str:
+    """Strip the port from a Host header value ("[::1]:8799" -> "::1")."""
+    v = (value or "").strip()
+    if v.startswith("["):
+        end = v.find("]")
+        return v[1:end] if end != -1 else v
+    if v.count(":") == 1:
+        return v.split(":", 1)[0]
+    return v
+
+
+def screen_request(headers, *, bind_host: str,
+                   max_bytes: int = MAX_REQUEST_BYTES) -> Optional[Tuple[int, str]]:
+    """Transport checks run before a request body is read.
+
+    Returns ``(status, message)`` to reject, or ``None`` to accept.
+
+    * An ``Origin`` header means a web browser sent the request (the Burp
+      extension never sets one). Refusing it stops a page open in the testing
+      browser from driving the bridge (cross-site request forgery).
+    * When the bridge is bound to loopback, the ``Host`` header must name a
+      loopback host too; anything else is a DNS-rebinding attempt.
+    * The declared body size must be sane and within ``max_bytes``.
+    """
+    if headers.get("Origin"):
+        return 403, "browser-originated request refused (Origin header present)"
+    if is_loopback(bind_host):
+        host = _host_only(headers.get("Host") or "")
+        if host and not is_loopback(host):
+            return 403, f"Host header {host!r} is not loopback (possible DNS rebinding)"
+    raw = headers.get("Content-Length", "0") or "0"
+    try:
+        length = int(raw)
+    except ValueError:
+        return 400, "bad Content-Length"
+    if length < 0:
+        return 400, "bad Content-Length"
+    if length > max_bytes:
+        return 413, f"request body exceeds {max_bytes} bytes"
+    return None
 
 
 def _call_with_timeout(fn, timeout):
@@ -80,7 +171,8 @@ class BridgeService:
     def __init__(self, profiles: Dict[str, Profile] | None = None,
                  default_vars: Dict[str, str] | None = None,
                  token: str | None = None,
-                 timeout: float | None = DEFAULT_TIMEOUT):
+                 timeout: float | None = DEFAULT_TIMEOUT,
+                 max_ctx: int = MAX_CTX_ENTRIES):
         self.profiles: Dict[str, Profile] = profiles or {}
         # Optional shared-secret. When set, the HTTP transport requires a
         # matching X-Relay-Token header. Default None -> no auth (unchanged
@@ -95,7 +187,9 @@ class BridgeService:
         # captured_vars: populated by the JS capture hook at runtime (v0.3).
         # These override default_vars but are overridden by per-message "vars".
         self.captured_vars: Dict[str, str] = {}
-        self._ctx: Dict[str, tuple] = {}   # ctx_token -> (ctx, engine, channel, orig_wire)
+        # ctx_token -> (ctx, engine, channel, orig_wire); bounded LRU.
+        self._ctx: "OrderedDict[str, tuple]" = OrderedDict()
+        self.max_ctx = max(1, int(max_ctx))
 
     def add_profile(self, profile: Profile) -> None:
         self.profiles[profile.name] = profile
@@ -180,14 +274,22 @@ class BridgeService:
         eng = Engine(profile)
         wire = base64.b64decode(msg["wire"])
         plain = eng.decrypt(channel, wire, ctx)
-        token = "t-" + secrets.token_hex(4)
-        self._ctx[token] = (ctx, eng, channel, wire)
+        token = self._remember((ctx, eng, channel, wire))
         return {"ok": True, "plaintext": plain, "ctx_token": token}
+
+    def _remember(self, entry: tuple) -> str:
+        """Store a flow for a later encrypt(); evict the oldest past max_ctx."""
+        token = "t-" + secrets.token_hex(16)   # 128-bit, unguessable
+        self._ctx[token] = entry
+        while len(self._ctx) > self.max_ctx:
+            self._ctx.popitem(last=False)
+        return token
 
     def _encrypt(self, msg: dict) -> dict:
         token = msg.get("ctx_token")
         if token not in self._ctx:
             raise DecryptError(category="config_error", message="unknown or expired ctx_token")
+        self._ctx.move_to_end(token)           # recently used -> keep longer
         ctx, eng, channel, orig = self._ctx[token]
         wire = eng.encrypt(channel, msg["plaintext"], ctx)
         return {"ok": True, "wire": base64.b64encode(wire).decode("ascii"),
@@ -212,7 +314,8 @@ def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799
     is printed once, a changed scheme is flagged NEW, and every observation is
     appended to ``observe_path`` (JSONL) for ``relay inspect`` to merge.
     """
-    from http.server import BaseHTTPRequestHandler, HTTPServer
+    # Fail closed before anything (bridge or capture sidecar) binds a socket.
+    require_safe_bind(host, service.token)
 
     # Optionally start the key-capture + observer sidecar
     if capture_port:
@@ -227,42 +330,65 @@ def serve_http(service: BridgeService, host: str = "127.0.0.1", port: int = 8799
             tag = "⚠ NEW SCHEME" if is_new else "scheme"
             print(f"[tatar-relay] {tag}: {summ}")
 
-        serve_capture(cap, host=host, port=capture_port, block=False,
+        cap_host = capture_bind_host(host)
+        serve_capture(cap, host=cap_host, port=capture_port, block=False,
                       on_key=_on_key, observations=obs_log, on_observe=_on_observe,
                       token=capture_token)
-        print(f"tatar-relay capture  on http://{host}:{capture_port}/key  "
+        print(f"tatar-relay capture  on http://{cap_host}:{capture_port}/key  "
               f"(var={capture_key_var!r})")
-        print(f"tatar-relay observe  on http://{host}:{capture_port}/observe  "
+        print(f"tatar-relay observe  on http://{cap_host}:{capture_port}/observe  "
               f"-> {observe_path}")
 
+    srv = make_server(service, host=host, port=port)
+    print(f"tatar-relay bridge   on http://{host}:{port}  profiles={list(service.profiles)}")
+    srv.serve_forever()
+
+
+def make_server(service: BridgeService, host: str = "127.0.0.1", port: int = 8799):
+    """Build (but do not start) the JSON-RPC HTTP server.
+
+    Every request passes, in order: ``screen_request`` (Origin / Host / size),
+    the optional token check, then the timed handler. Rejections never read
+    the body and always use the normal ``{"ok": false, "error": {...}}`` shape.
+    """
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    require_safe_bind(host, service.token)
+
     class Handler(BaseHTTPRequestHandler):
-        def do_POST(self):  # noqa: N802
-            if not service.authorize(self.headers.get("X-Relay-Token")):
-                body = b'{"ok":false,"error":{"category":"config_error",' \
-                       b'"message":"unauthorized: missing or bad X-Relay-Token"}}'
-                self.send_response(401)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                msg = json.loads(self.rfile.read(length) or b"{}")
-                resp = service.handle_timed(msg)
-                code = 200
-            except Exception as e:  # noqa: BLE001
-                resp, code = {"ok": False, "error": {"category": "internal", "message": str(e)}}, 400
-            body = json.dumps(resp).encode("utf-8")
+        def _reply(self, code: int, payload: dict) -> None:
+            body = json.dumps(payload).encode("utf-8")
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
+
+        def _reject(self, code: int, message: str) -> None:
+            self._reply(code, {"ok": False, "error": {"category": "config_error",
+                                                      "message": message}})
+
+        def do_POST(self):  # noqa: N802
+            verdict = screen_request(self.headers, bind_host=host)
+            if verdict:
+                self._reject(*verdict)
+                return
+            if not service.authorize(self.headers.get("X-Relay-Token")):
+                self._reject(401, "unauthorized: missing or bad X-Relay-Token")
+                return
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            try:
+                msg = json.loads(self.rfile.read(length) or b"{}")
+                if not isinstance(msg, dict):
+                    raise ValueError("request must be a JSON object")
+                resp, code = service.handle_timed(msg), 200
+            except Exception as e:  # noqa: BLE001
+                resp, code = {"ok": False, "error": {"category": "internal",
+                                                     "message": str(e)}}, 400
+            self._reply(code, resp)
 
         def log_message(self, *a):  # silence
             pass
 
-    srv = HTTPServer((host, port), Handler)
-    print(f"tatar-relay bridge   on http://{host}:{port}  profiles={list(service.profiles)}")
-    srv.serve_forever()
+    return HTTPServer((host, port), Handler)

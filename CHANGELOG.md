@@ -6,6 +6,39 @@
 
 ---
 
+## [Unreleased]
+
+### Аюулгүй байдал (tool-ын өөрийн)
+- **Bridge-ийг сүлжээнд token-гүй нээхгүй** — loopback бус хаяг дээр `--token`
+  байхгүй бол асахаас татгалзана (fail-closed). Ингэснээр LAN дээрх хэн нэгэн
+  bridge-ийг decrypt/encrypt oracle болгож ашиглах боломжгүй.
+- **Браузерээс ирсэн хүсэлт ба DNS rebinding-ийг татгалзана** — `Origin`
+  header-тэй хүсэлт (Burp extension хэзээ ч илгээдэггүй) болон loopback бус
+  `Host`-ыг `403`-аар буцаана.
+- **Нөөцийн хязгаар** — request body 16 MiB (`413`), flow store LRU-аар
+  хязгаарлагдсан, `ctx_token` 128-bit санамсаргүй болсон.
+- **Capture sidecar үргэлж loopback** — bridge сүлжээнд нээгдсэн ч `/key`
+  руу LAN-аас хуурамч түлхүүр оруулах боломжгүй.
+- `relay bridge --host` тайлбар болон user-guide §9-д шинэ дүрмийг тусгав.
+
+### Supply chain ба repo-гийн бодлого
+- **`security.yml` workflow** — repo policy guard, gitleaks (checksum-оор
+  баталгаажсан binary, бүтэн түүх), `pip-audit`, CodeQL (Python + Java);
+  долоо хоног бүр мөн ажиллана. Bot / автомат PR ашиглахгүй.
+- **Бүх GitHub Actions commit SHA-гаар pin** хийгдсэн.
+- **Release-д CycloneDX SBOM** (цэвэр venv-ээс) ба **Sigstore-оор гарын
+  үсэг зурсан build provenance** нэмэгдэв; SBOM нь `SHA256SUMS`-д орсон.
+- **`tools/policy_check.py`** — хориотой нэр, attribution, bot author-ыг
+  tracked файл (зураг/pptx metadata оролцуулан), commit message, author-аас
+  илрүүлнэ; нэрсийг зөвхөн SHA-256 hash-аар хадгалж, log-д ч хэвлэхгүй.
+- `.gitleaks.toml` — зөвхөн тодорхой синтетик тест векторыг allowlist хийнэ.
+
+### Баримт
+- `THREAT_MODEL.md` (хөрөнгө, итгэлцлийн хил, STRIDE аюул → хяналт → код/тест),
+  `CRYPTO.md` (алгоритмын жагсаалт, legacy MD5/SHA-1 зөвхөн interop-д гэдэг
+  тайлбар), `SECURITY.md` дэмжигдэх хувилбар 0.7.x, CONTRIBUTING-д бодлого.
+- Нийт: **309 тест**.
+
 ## [0.7.0] — 2026-11-10 · Declarative key derivation, inflate codec
 
 ### Нэмэгдсэн зүйлс

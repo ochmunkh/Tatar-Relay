@@ -1,0 +1,15 @@
+title = "Tatar Relay gitleaks config"
+
+[extend]
+useDefault = true
+
+# Publicly known, synthetic test vectors used across the tests and docs.
+# Allowlisted by exact value only, so a real secret anywhere (tests included)
+# is still detected.
+[[allowlists]]
+description = "Synthetic test vectors (sequential / RFC-style), never real keys"
+regexes = [
+  '''^00112233445566778899aabbccddeeff(00112233445566778899aabbccddeeff)?$''',
+  '''^000102030405060708090a0b0c0d0e0f(101112131415161718191a1b1c1d1e1f)?$''',
+  '''^(deadbeef)+$''',
+]
