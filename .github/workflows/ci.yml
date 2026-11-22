@@ -47,7 +47,10 @@ jobs:
 
   test:
     name: Tests (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: from Ubuntu 26.04 the runner image no longer
+    # offers CPython 3.9, which is still the declared floor (requires-python).
+    # 24.04 keeps the floor honestly tested; revisit when the floor is raised.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
