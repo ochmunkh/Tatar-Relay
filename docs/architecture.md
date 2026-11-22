@@ -29,6 +29,7 @@ Tatar Relay нь **vendor-independent application-layer protocol adapter** бу�
 Profile нь бүх тохиргооны эх сурвалж. YAML-аас ачаалагдаж, нэг удаа шалгагдана (build time validation). Ачааллах үед:
 
 - **Scope шалгалт** (fail-closed): `scope.hosts` хоосон бол ачаалахгүй
+- **Schema хувилбар**: `schema_version` (заавал биш, байхгүй бол 1) build-ийн дэмждэгээс шинэ бол fail-closed татгалзана
 - **Pipeline бүтэх**: transform step бүрийн `configure()` дуудагдана — тохиргооны алдаа энд гарна
 - **Python hook хориг**: `security.allow_python_hooks: false` (анхдагч) бол Python step ачаалахгүй
 - **Хувьсагч тодорхойлол**: `vars:` блок → `VarStore` суурийг бэлдэнэ
@@ -137,6 +138,8 @@ DataType.ANY    — аль ч төрөл
 
 Step-үүдийн хооронд төрлийн тохиромжгүй байдал `type_mismatch` алдаа үүсгэнэ.
 
+Одоогийн native codec/step-үүд: `base64_decode`, `hex_decode`, `gunzip`, `inflate` (DEFLATE/zlib), `nonce_body`, `strip_prefix`, `aes_decrypt`, `chacha20_decrypt`, `evp_aes_decrypt`, `hmac_verify`, `as_json`, `as_text`, `python`.
+
 
 ### 2.4b KDF / Passphrase Steps (`steps/kdf.py`)
 
@@ -192,6 +195,8 @@ rnd.render_bytes("${payload}")        # → bytes заавал
 ```
 
 `extras` dict нь VarStore-ийн дээр давхарлагдана — step дотор нэмэлт context утга дамжуулахад ашиглана.
+
+**Деривацийн var source** (`derive.py`): `vars:` блокт `from: hkdf` эсвэл `from: ecdh` зарлаж, «ECDH shared secret → HKDF → AES key» гэх key derivation-ийг **Python hook-гүйгээр** declarative хийнэ. Эдгээр нь live — `--var` / captured secret-ийг decrypt үед хардаг тул итгэмжлэгдээгүй профайлд ч ажиллана.
 
 ### 2.7 Context (`context.py`)
 
@@ -335,3 +340,6 @@ vars:
 | Constant-time compare | `hmac.compare_digest()` — timing attack хориг |
 | Алдаа нууцалдаггүй | Бүх алдаа category + message-тэй |
 | Template injection | Renderer зөвхөн VarStore ба extras-аас авна |
+| Bridge — сүлжээнд хамгаалалт | token-гүй бол зөвхөн loopback; `Origin`-тэй (браузер) ба loopback бус `Host` (DNS rebinding) татгалзана; request body cap (16 MiB) + timeout; ctx store LRU; capture sidecar үргэлж loopback |
+| Schema fail-closed | `schema_version` build-ийн дэмждэгээс шинэ профайлыг татгалзана |
+| Supply chain | gitleaks, pip-audit, CodeQL, SHA-pinned actions, SBOM + гарын үсэгтэй provenance, repo policy guard |

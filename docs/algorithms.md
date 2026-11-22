@@ -237,6 +237,18 @@ Canonical формат: key эрэмбэлэгдсэн, хоосон зай ба
 
 ---
 
+### `inflate` — DEFLATE / zlib задлах (сэргээх)
+
+`gunzip`-ийн хос: `Content-Encoding: deflate` (RFC 1950 zlib, эсвэл `raw: true` үед RFC 1951 raw DEFLATE). Урвуутай; `gunzip` шиг гаралтын хэмжээг cap хийдэг (decompression-bomb-аас хамгаална, анхдагч 64 MiB).
+
+```yaml
+transform:
+  - inflate: { raw: false }   # zlib-wrapped (анхдагч); raw: true = headerless DEFLATE
+```
+
+- **forward:** шахсан байт → задарсан байт
+- **backward:** задарсан байт → шахсан байт
+
 ### `as_json` — JSON Parse / Serialize
 
 **Файл:** `tatar_relay/steps/structural.py`
@@ -284,6 +296,29 @@ decrypt үед header ил болж, encrypt үед дахин шифрлэгд�
 [`examples/full-envelope.yaml`](../examples/full-envelope.yaml).
 
 ---
+
+## 1b. Key derivation — `hkdf` / `ecdh` var source
+
+Transform step биш, харин `vars:` блокийн эх сурвалж. «ECDH shared secret → HKDF → AES key» гэх түгээмэл handshake-ийг **Python hook-гүйгээр** declarative задлахад. Деривацийн var нь live — `--var` / captured secret-ийг decrypt үед хардаг, `allow_python_hooks: false` профайлд ажиллана (`tatar_relay/derive.py`).
+
+```yaml
+vars:
+  shared:
+    from: ecdh
+    curve: x25519            # эсвэл p256
+    private: "${my_priv}"     # манай scalar (hex / b64: / str:)
+    peer_public: "${srv_pub}"
+  session_key:
+    from: hkdf
+    secret: "${shared}"       # эсвэл шууд captured secret
+    salt: "app-salt"          # анхдагчаар UTF-8 label; hex:/b64:/str: override
+    info: "handshake v1"
+    length: 32
+    hash: sha256              # sha256 (анхдагч) / sha512 / sha1
+```
+
+- **hkdf** — RFC 5869 (HKDF-Extract+Expand). `salt`/`info` анхдагчаар UTF-8, prefix-ээр codec сонгоно.
+- **ecdh** — X25519 (raw 32-байт key) эсвэл P-256 (32-байт scalar + uncompressed point). Гаралт нь shared secret, ихэвчлэн `hkdf`-д дамжина.
 
 ## 2. Reseal Steps
 

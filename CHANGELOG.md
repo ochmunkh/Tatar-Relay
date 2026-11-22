@@ -6,7 +6,7 @@
 
 ---
 
-## [Unreleased]
+## [0.8.0] — 2026-11-22 · Bridge & supply-chain hardening, async Burp editors, Intruder fuzzing
 
 ### Burp extension (Java)
 - **Тайлалт UI thread-ээс гадна (async).** Editor таб bridge дээр царцахаа

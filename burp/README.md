@@ -1,4 +1,4 @@
-# Tatar Relay — Burp extension (v0.2)
+# Tatar Relay — Burp extension
 
 <b><a href="#english">English</a> · <a href="#монгол">Монгол</a></b>
 

@@ -135,20 +135,22 @@ Wire body → server
   silently break an HMAC even with the right key, so serialize modes are
   explicit: `preserve` / `canonical` / `compact`.
 
-### What it supports (v0.6)
+### What it supports (v0.8)
 
 - **Ciphers (native):** AES-CBC, AES-GCM, ChaCha20-Poly1305, **EVP_BytesToKey passphrase-mode**
   (`evp_aes_decrypt` — EVP_BytesToKey/MD5 KDF, `{ct,iv,s}` body format) — plus any scheme via
-  a Python hook (ECDH+GCM, RSA-hybrid, …).
-- **Codecs:** base64, hex, gzip, `nonce_body` (split a `hex-nonce + base64`
+  a Python hook (ECDH+GCM, RSA-hybrid, …). Keys derive declaratively with native
+  **`hkdf`** / **`ecdh`** var sources — no hook.
+- **Codecs:** base64, hex, gzip, **`inflate`** (DEFLATE/zlib), `nonce_body` (split a `hex-nonce + base64`
   field into raw `nonce‖ct`), and `strip_prefix` (peel a fixed IV / wrapping
   header off a blob) — no hook needed.
 - **Integrity:** `hmac_verify` (SHA-1/256/512) forward; HMAC sign (SHA-256/512) on reseal.
 - **Envelope:** raw / json_field / header (edits re-encrypt on the way out) / regex,
   plus **per-header sub-pipelines** — decrypt/edit/re-encrypt the body *and*
   independently-encrypted headers together (the "full symmetric envelope" class).
-- **Frontends:** Burp (request + response tabs), mitmproxy addon, full CLI, JSON-RPC bridge
-  (optional token auth, typed `--var` coercion: `str:` / `b64:` / `hex:` / bare = hex).
+- **Frontends:** Burp (async request + response tabs, Intruder plaintext fuzzing), mitmproxy
+  addon, full CLI, JSON-RPC bridge (optional token auth; loopback-only without a token;
+  typed `--var` coercion: `str:` / `b64:` / `hex:` / bare = hex).
 - **Detection:** live crypto observer + smart `inspect` with draft-profile output.
 - **Target classes:** see [`docs/target-classes.md`](docs/target-classes.md) — field-wise AEAD,
   passphrase/KDF, and full symmetric envelope (body + encrypted headers) are all covered.
@@ -180,7 +182,14 @@ pytest            # 311 tests: unit + round-trip + golden + fuzz/hostile-input
   re-encrypt write-back, `strip_prefix` codec.
 - **v0.6** — native `evp_aes_decrypt` (EVP_BytesToKey/MD5 passphrase mode); bridge typed
   var coercion (`str:` / `b64:` / `hex:`); Windows console Unicode fix.
-- **next** — hook sandbox (isolate Python hooks from untrusted profiles), then native key derivation (ECDH / HKDF / RSA-hybrid), Intruder payload support, WebSocket.
+- **v0.7** — `relay explain`, profile `schema_version`, bridge execution timeout, graceful
+  unsupported-cipher errors; native key derivation (`hkdf` / `ecdh` var sources); `inflate`
+  (DEFLATE) codec.
+- **v0.8** — bridge transport hardening (loopback-only without a token, Origin/DNS-rebinding
+  refusal, request caps); supply-chain checks (gitleaks, pip-audit, CodeQL, SBOM, signed
+  provenance, SHA-pinned actions) + repository policy guard; async Burp editors (UI never
+  blocks) and Intruder plaintext fuzzing.
+- **next** — WebSocket frames, in-Burp Live Preview + byte-diff, multi-request stateful sequences.
 
 ### License
 
@@ -278,19 +287,21 @@ Transform алхмууд нь **reversible** (`decrypt(encrypt(x)) == x`). Resea
 өөрчлөгдөж, зөв key ашигласан ч HMAC эвдэрч болдог тул serialize хийх горимыг
 `preserve` / `canonical` / `compact` гэж тодорхой заана.
 
-### Юу дэмждэг вэ (v0.6)
+### Юу дэмждэг вэ (v0.8)
 
 - **Cipher (native):** AES-CBC, AES-GCM, ChaCha20-Poly1305, **EVP_BytesToKey passphrase-mode**
   (`evp_aes_decrypt` — EVP_BytesToKey/MD5 KDF, `{ct,iv,s}` формат) — мөн Python hook-оор
-  аль ч scheme (ECDH+GCM, RSA-hybrid …).
-- **Codec:** base64, hex, gzip, `nonce_body` (hex-nonce + base64 талбар), `strip_prefix`
+  аль ч scheme (ECDH+GCM, RSA-hybrid …). Түлхүүрийг native **`hkdf`** / **`ecdh`** var
+  source-оор hook-гүйгээр declarative гаргана.
+- **Codec:** base64, hex, gzip, **`inflate`** (DEFLATE/zlib), `nonce_body` (hex-nonce + base64 талбар), `strip_prefix`
   (тогтмол IV / wrapping угтвар салгах) — бүгдийг hook ашиглахгүйгээр дэмжинэ.
 - **Integrity:** `hmac_verify` (SHA-1/256/512); reseal HMAC sign (SHA-256/512).
 - **Envelope:** raw / json_field / header (засвар гарахдаа дахин шифрлэгдэнэ) / regex,
   мөн **header тус бүрийн дэд-pipeline** — body БА тусад нь шифрлэгдсэн header-уудыг
   хамтад нь тайлж, засварлаад, дахин шифрлэнэ ("бүрэн симметрик envelope" ангилал).
-- **Frontend:** Burp (request + response tab), mitmproxy addon, бүрэн CLI, JSON-RPC bridge
-  (optional token, typed `--var`: `str:` / `b64:` / `hex:` / bare = hex).
+- **Frontend:** Burp (async request + response tab, Intruder plaintext fuzzing), mitmproxy
+  addon, бүрэн CLI, JSON-RPC bridge (optional token; token-гүй бол зөвхөн loopback;
+  typed `--var`: `str:` / `b64:` / `hex:` / bare = hex).
 - **Detection:** live crypto observer + ухаалаг `inspect` (draft profile).
 - **Зорилтот ангилал:** [`docs/target-classes.md`](docs/target-classes.md) — field-wise AEAD,
   passphrase/KDF, бүрэн симметрик envelope (body + encrypted headers) бүгд хамрагдсан.
@@ -322,7 +333,14 @@ pytest            # 311 тест: unit + round-trip + golden + fuzz/дайсаг
   header-ийг буцааж шифрлэж бичэх, `strip_prefix` codec.
 - **v0.6** — native `evp_aes_decrypt` (EVP_BytesToKey/MD5 passphrase-mode); bridge-ийн
   typed var coercion (`str:` / `b64:` / `hex:`); Windows console Unicode засвар.
-- **дараагийн** — hook sandbox (итгэмжлэгдээгүй profile-ын Python hook-ыг тусгаарлах), дараа нь native key derivation (ECDH / HKDF / RSA-hybrid), Intruder payload, WebSocket.
+- **v0.7** — `relay explain`, профайлын `schema_version`, bridge-ийн timeout, дэмжигдээгүй
+  шифрийн ойлгомжтой алдаа; native key derivation (`hkdf` / `ecdh` var source); `inflate`
+  (DEFLATE) codec.
+- **v0.8** — bridge-ийн transport hardening (token-гүй бол зөвхөн loopback, Origin/DNS-rebinding
+  татгалзал, хүсэлтийн cap); supply-chain шалгалт (gitleaks, pip-audit, CodeQL, SBOM, гарын
+  үсэгтэй provenance, SHA-pinned actions) + repo policy guard; async Burp editor (UI царцахгүй)
+  болон Intruder plaintext fuzzing.
+- **дараагийн** — WebSocket frame, Burp дотор Live Preview + byte-diff, multi-request stateful дараалал.
 
 ### Лиценз
 

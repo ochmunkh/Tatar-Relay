@@ -12,8 +12,8 @@ The latest released version receives security fixes. Older tags do not.
 
 | Version | Supported |
 |---------|-----------|
-| 0.7.x   | ✅        |
-| < 0.7   | ❌        |
+| 0.8.x   | ✅        |
+| < 0.8   | ❌        |
 
 ## Reporting a vulnerability
 
