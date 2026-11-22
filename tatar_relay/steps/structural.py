@@ -15,9 +15,13 @@ class AsJson(Step):
     out_type = DataType.JSON
 
     def forward(self, data, ctx: Context):
-        raw = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else data
         try:
+            raw = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else data
             return json.loads(raw)
+        except UnicodeDecodeError as e:
+            raise DecryptError(category="type_mismatch",
+                               message=f"as_json: plaintext is not valid UTF-8 ({e.reason} at byte {e.start})",
+                               step=self.name, direction="forward")
         except json.JSONDecodeError as e:
             raise DecryptError(category="type_mismatch",
                                message=f"as_json: not valid JSON: {e}",
@@ -34,7 +38,13 @@ class AsText(Step):
     out_type = DataType.TEXT
 
     def forward(self, data, ctx: Context) -> str:
-        return data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else str(data)
+        try:
+            return data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else str(data)
+        except UnicodeDecodeError as e:
+            # attacker-influenced plaintext: classify, and never echo its bytes
+            raise DecryptError(category="type_mismatch",
+                               message=f"as_text: plaintext is not valid UTF-8 ({e.reason} at byte {e.start})",
+                               step=self.name, direction="forward")
 
     def backward(self, data, ctx: Context) -> bytes:
         return data.encode("utf-8") if isinstance(data, str) else bytes(data)

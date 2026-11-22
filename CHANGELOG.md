@@ -6,6 +6,24 @@
 
 ---
 
+## [Unreleased]
+
+### Security
+- **Threat model нь код/тесттэй хоёр талаар бэхлэгдсэн.** `tools/claims_check.py`
+  нь `THREAT_MODEL.md`-ийн T-мөр бүр байгаа тест/код/workflow-г иш татсан эсэхийг,
+  мөн аюулгүй байдлын тест бүр ямар нэг мөрөөр иш татагдсан эсэхийг шалгана
+  (CI-д `Threat-model claim/test gate`). Мета-тест нь хугацаа хоцорсон иш,
+  устсан тест, нэр солигдсон функцийг барьж байгааг баталгаажуулна.
+- **Тайлсан plaintext = дайсагч өгөгдөл (T10).** `tests/test_hostile_plaintext.py`:
+  control/NUL/мөр таслагч/bidi/markup/1 MiB plaintext decrypt -> encrypt-ээр
+  өөрчлөгдөхгүй, bridge-ийн JSON нэг мөр хэвээр, алдаа ангилагдсан.
+- **Засвар:** UTF-8 биш plaintext `as_text`/`as_json` дээр ангилаагүй `internal`
+  алдаа болдог байсныг `type_mismatch` болгов (plaintext-ийн байтыг алдаанд
+  давтахгүй).
+- **Burp Comment багана:** `Seal.preview` нь control, bidi, мөр/догол таслагч
+  тэмдэгтийг цэвэрлэж, surrogate хослолыг таслахгүй.
+- Нийт: **330 тест** (Python) + Java LogicTest/ExtensionLoadTest.
+
 ## [0.8.0] — 2026-11-22 · Bridge & supply-chain hardening, async Burp editors, Intruder fuzzing
 
 ### Burp extension (Java)

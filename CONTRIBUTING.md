@@ -129,6 +129,11 @@ Describe cryptography by **algorithm name only**, and use synthetic data
 publishes them. Run `python tools/policy_check.py` (and `... commits`) before
 pushing.
 
+A new security control or test also belongs in
+[THREAT_MODEL.md](THREAT_MODEL.md): `python tools/claims_check.py` fails when a
+threat row cites a test or symbol that does not exist, or when a security test
+(hardening, scope, policy, fuzz, hostile, ...) backs no threat row.
+
 ## Scope of a change
 
 - Python hooks are arbitrary code execution, so untrusted profiles stay
@@ -211,6 +216,11 @@ Public tree, commit message, commit author-д тодорхой байгуулл�
 Криптог **зөвхөн алгоритмын нэрээр** бичнэ, жишээ/тестэд синтетик өгөгдөл.
 `tools/policy_check.py` үүнийг CI болон pytest-д шалгана (нэрсийг зөвхөн SHA-256
 hash-аар хадгална). Push хийхээс өмнө `python tools/policy_check.py` ажиллуул.
+
+Аюулгүй байдлын шинэ хяналт/тест нь [THREAT_MODEL.md](THREAT_MODEL.md)-д орсон
+байх ёстой: `python tools/claims_check.py` нь T-мөр байхгүй тест/функц иш татвал,
+эсвэл аюулгүй байдлын тест (hardening, scope, policy, fuzz, hostile ...) ямар ч
+мөрөнд холбогдоогүй бол унана.
 
 ### Өөрчлөлтийн хүрээ
 

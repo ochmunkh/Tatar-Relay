@@ -27,6 +27,7 @@ public final class LogicTest {
         sealTokenShape();
         sealPreviewIsBoundedOneLine();
         sealWithheldNote();
+        sealPreviewNeutralisesHostileText();
         bridgeSecondsParsing();
         bridgePrettyKeepsAngleBrackets();
 
@@ -104,6 +105,22 @@ public final class LogicTest {
         check("preview collapses whitespace to one line", p.equals("line one line two x"));
         check("preview is length-bounded with an ellipsis",
                 Seal.preview("abcdefghij", 5).equals("abcd…"));
+    }
+
+    private static void sealPreviewNeutralisesHostileText() {
+        String hostile = "a\u0000b\u001b[31mred\u202eevil\u2028x\u2029y\u0085z";
+        String p = Seal.preview(hostile, 200);
+        boolean clean = true;
+        for (int i = 0; i < p.length(); i++) {
+            int t = Character.getType(p.charAt(i));
+            if (t == Character.CONTROL || t == Character.FORMAT
+                    || p.charAt(i) == '\u2028' || p.charAt(i) == '\u2029') clean = false;
+        }
+        check("preview strips control, bidi and separator characters", clean);
+        String emoji = "ab\uD83D\uDD12cd";                       // surrogate pair at the cut
+        String cut = Seal.preview(emoji, 4);
+        check("preview never splits a surrogate pair",
+                !Character.isHighSurrogate(cut.charAt(cut.length() - 2)));
     }
 
     private static void sealWithheldNote() {

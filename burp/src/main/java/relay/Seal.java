@@ -32,9 +32,14 @@ final class Seal {
     /** One-line, length-bounded preview for a Burp comment column. */
     static String preview(String text, int max) {
         if (text == null) return "";
-        String one = text.replaceAll("\\s+", " ").trim();
+        // The text is decrypted, attacker-influenced data headed for a UI cell:
+        // neutralise control, format (bidi) and line-separator characters.
+        String one = text.replaceAll("[\\p{Cc}\\p{Cf}\\u2028\\u2029]", " ")
+                .replaceAll("\\s+", " ").trim();
         if (max < 2 || one.length() <= max) return one;
-        return one.substring(0, max - 1) + "…";
+        int cut = max - 1;
+        if (Character.isHighSurrogate(one.charAt(cut - 1))) cut--;   // keep pairs whole
+        return one.substring(0, cut) + "…";
     }
 
     /** Note for a request whose body was withheld because sealing failed. */

@@ -45,6 +45,11 @@ jobs:
       - name: README bilingual parity
         run: python tools/readme_parity.py
 
+      # Every THREAT_MODEL.md claim must cite live tests/code, and every
+      # security test must back a claim (tools/claims_check.py).
+      - name: Threat-model claim/test gate
+        run: python tools/claims_check.py
+
   test:
     name: Tests (py${{ matrix.python-version }})
     # Pinned, not ubuntu-latest: from Ubuntu 26.04 the runner image no longer

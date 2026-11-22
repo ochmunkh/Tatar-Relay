@@ -48,7 +48,7 @@ answers each one — with the code and test that prove it.
 | T7 | Profile → engine | A community profile runs code (E) | Declarative-only by default: any Python hook (incl. in header sub-pipelines and vars) is rejected unless `allow_python_hooks: true` | `Profile._guard_hooks` · `test_profile.py`, `test_hook_contract.py` |
 | T8 | Profile → target | Using a profile against an unauthorized host (E) | Scope is fail-closed: no `hosts` → refuse to load; per-request host/path authorization | `Profile.authorize` · `test_scope_gate.py` |
 | T9 | Profile from the future | An older build silently mis-reads a newer profile (T) | `schema_version` newer than supported is refused | `Profile._read_schema_version` · `test_schema_version.py` |
-| T10 | Target message → engine | Malformed / hostile input crashes the proxy or leaks partial plaintext (D, I) | Structured `DecryptError` taxonomy, original bytes passed through on failure; decompression caps | `errors.py`, `engine._run`, `codecs` · `test_fuzz.py`, `test_inflate.py` |
+| T10 | Target message → engine | Malformed / hostile input crashes the proxy or leaks partial plaintext (D, I) | Structured `DecryptError` taxonomy, original bytes passed through on failure; decompression caps | `errors.py`, `engine._run`, `codecs` · `test_fuzz.py`, `test_inflate.py`, `test_unsupported_cipher.py`, `test_hostile_plaintext.py` |
 | T11 | Logs / CLI output | Keys or secrets printed (I) | Keys never logged; `relay explain` redacts literal keys; capture logs sizes, not values | `cli._params_summary`, `capture.py` · `test_explain.py`, `test_capture_exposure.py` |
 | T12 | Crypto misuse | Nonce reuse on encrypt, timing leaks on MAC check (I) | Random nonce/IV per message on encrypt; constant-time MAC comparison | `steps/crypto.py`, `steps/chacha.py`, `steps/auth.py` · `test_crypto.py`, `test_hmac_verify.py` — see [CRYPTO.md](CRYPTO.md) |
 | T13 | Supply chain | Vulnerable dependency, leaked secret, moved action tag, tampered release (T) | `pip-audit`, gitleaks (checksum-verified binary), CodeQL, actions pinned by commit SHA, CycloneDX SBOM + signed build provenance on release | `.github/workflows/security.yml`, `release.yml` |
@@ -64,7 +64,11 @@ answers each one — with the code and test that prove it.
 - **Regular expressions in a profile** can be slow on crafted input. The bridge
   timeout bounds the damage; the CLI has no timeout.
 - **Decrypted plaintext is shown in Burp** and wherever the operator copies it;
-  handling it is the operator's responsibility.
+  handling it is the operator's responsibility. It is treated as hostile data at
+  the tool's own boundaries: it round-trips byte-for-byte, never breaks the
+  bridge's one-line JSON, undecodable bytes become a classified error, and the
+  Burp Comment preview strips control and bidi characters
+  (`test_hostile_plaintext.py`, `LogicTest`).
 - **Client-side keys:** app-layer encryption whose key lives on the client is
   obfuscation over TLS. The tool works *with* keys the authorized tester already
   holds; it does not recover keys or break cryptography.

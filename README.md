@@ -9,7 +9,7 @@ they were plain HTTP, right inside Burp.
 
 <p align="center">
   <a href="https://github.com/ochmunkh/Tatar-Relay/actions/workflows/ci.yml"><img src="https://github.com/ochmunkh/Tatar-Relay/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/tests-311-brightgreen" alt="tests">
+  <img src="https://img.shields.io/badge/tests-330-brightgreen" alt="tests">
   <a href="https://github.com/ochmunkh/Tatar-Relay/releases"><img src="https://img.shields.io/github/v/release/ochmunkh/Tatar-Relay" alt="release"></a>
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
 </p>
@@ -170,7 +170,7 @@ loader refuses hooks unless `security.allow_python_hooks: true`). Scope is
 
 ```bash
 pip install -e .[dev]
-pytest            # 311 tests: unit + round-trip + golden + fuzz/hostile-input
+pytest            # 330 tests: unit + round-trip + golden + fuzz/hostile-input
 ```
 
 ### Roadmap
@@ -321,7 +321,7 @@ Python код агуулагдаж болох тул дурын код ажил�
 
 ```bash
 pip install -e .[dev]
-pytest            # 311 тест: unit + round-trip + golden + fuzz/дайсагч оролт
+pytest            # 330 тест: unit + round-trip + golden + fuzz/дайсагч оролт
 ```
 
 ### Замын зураг
